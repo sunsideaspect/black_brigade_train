@@ -6,11 +6,10 @@ export enum ExperienceLevel {
   INSTRUCTOR = "Сержантський склад / Командири груп"
 }
 
-// Нова структура для категорій та тем
 export interface TrainingCategory {
   id: string;
   title: string;
-  icon: string; // Emoji або назва іконки
+  icon: string;
   topics: string[];
 }
 
@@ -81,8 +80,8 @@ export interface TrainingModule {
   subject: string;
   description: string;
   type: 'Theory' | 'Practice' | 'Drill';
-  instructorTips: string[]; // Змінено на масив для списку
-  questions?: QuizItem[]; // Нове поле для контрольних питань
+  instructorTips: string[];
+  questions?: QuizItem[];
 }
 
 export interface TrainingDay {
@@ -97,12 +96,12 @@ export interface TrainingPlanResponse {
   title: string;
   overview: string;
   days: TrainingDay[];
-  isOffline?: boolean; // Прапорець для позначення режиму
+  isOffline?: boolean;
 }
 
 export interface TrainingFormData {
   durationDays: number;
   experienceLevel: ExperienceLevel;
-  focusAreas: string[]; // Тепер це масив рядків (обраних підтем)
+  focusAreas: string[];
   customNotes: string;
 }

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { TrainingPlanResponse, TrainingDay, TrainingModule, QuizItem } from '../types';
-import { Download, ShieldAlert, BookOpen, Hammer, Zap, RotateCcw, Printer, ChevronDown, ListChecks, Copy, Check, ExternalLink, Search, HelpCircle, Eye, ClipboardList, BrainCircuit, FileDown, WifiOff, Settings } from 'lucide-react';
+import { ShieldAlert, BookOpen, Hammer, Zap, RotateCcw, Printer, ChevronDown, ListChecks, Copy, Check, ExternalLink, Search, HelpCircle, Eye, ClipboardList, BrainCircuit, FileDown, WifiOff, Settings } from 'lucide-react';
 import { ExamView } from './ExamView';
 
 interface PlanDisplayProps {
@@ -18,7 +18,6 @@ const ModuleIcon = ({ type }: { type: string }) => {
   }
 };
 
-// Utility to render text with clickable links AND Search Queries
 const LinkedText: React.FC<{ text: string }> = ({ text }) => {
   const searchMatch = text.match(/[🔍🔎]?\s*Пошук:\s*(.+)/i);
   
@@ -81,7 +80,6 @@ const QuizBlock: React.FC<{ questions: QuizItem[] }> = ({ questions }) => {
                             <span className="text-emerald-500/70 mr-2 print:text-black">{idx + 1}.</span>
                             {q.question}
                         </p>
-                        {/* Spoiler Answer - Always visible in print */}
                         <div className="group relative cursor-pointer select-none print:hidden">
                             <div className="flex items-center gap-2 text-xs text-stone-500 mb-1 group-hover:opacity-0 transition-opacity absolute -top-1 left-0">
                                 <Eye className="w-3 h-3" /> Показати відповідь
@@ -90,7 +88,6 @@ const QuizBlock: React.FC<{ questions: QuizItem[] }> = ({ questions }) => {
                                 {q.answer}
                             </div>
                         </div>
-                        {/* Print only answer */}
                         <div className="hidden print:block text-sm font-mono mt-1 pl-4 border-l-2 border-gray-300">
                             Відповідь: {q.answer}
                         </div>
@@ -101,17 +98,12 @@ const QuizBlock: React.FC<{ questions: QuizItem[] }> = ({ questions }) => {
     );
 };
 
-// Sub-component for individual schedule items to manage expansion state
 const ScheduleItem: React.FC<{ module: TrainingModule; isLast: boolean }> = ({ module, isLast }) => {
   const [isOpen, setIsOpen] = useState(false);
-
-  // In print mode, always show details
   const isExpanded = isOpen; 
 
   return (
     <div className="relative flex flex-col md:flex-row group break-inside-avoid print:break-inside-avoid">
-      
-      {/* Mobile Time (Top of card) */}
       <div className="md:hidden flex items-center gap-2 mb-1.5 print:hidden">
          <span className="font-mono text-sm bg-stone-800 text-amber-500 px-2 py-0.5 rounded font-bold">
            {module.time}
@@ -119,15 +111,12 @@ const ScheduleItem: React.FC<{ module: TrainingModule; isLast: boolean }> = ({ m
          <div className="h-px bg-stone-800 flex-grow"></div>
       </div>
 
-      {/* Desktop/Print Time (Left side) */}
       <div className="hidden md:flex print:flex w-[85px] shrink-0 flex-col items-end pr-6 py-4 text-right">
         <span className="font-mono text-sm text-amber-500/80 font-bold print:text-black">{module.time}</span>
       </div>
 
-      {/* Desktop Timeline Dot */}
       <div className={`hidden md:block print:block absolute left-[81px] top-5 w-2.5 h-2.5 rounded-full z-10 transition-colors duration-300 print:bg-black print:border-none ${isOpen ? 'bg-amber-500 border-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)]' : 'bg-stone-600 border-stone-900 group-hover:bg-stone-500 border-2'}`}></div>
 
-      {/* Content Card (Clickable) */}
       <div className="flex-1 md:pl-6 md:py-2">
         <div 
           onClick={() => setIsOpen(!isOpen)}
@@ -158,13 +147,11 @@ const ScheduleItem: React.FC<{ module: TrainingModule; isLast: boolean }> = ({ m
               <ChevronDown className={`w-6 h-6 text-stone-600 transition-transform duration-300 shrink-0 mt-1 print:hidden ${isOpen ? 'rotate-180 text-amber-500' : ''}`} />
             </div>
 
-            {/* Instructor Tips (Accordion Content) - Always visible in print */}
             <div className={`grid transition-all duration-300 ease-in-out print:block ${isOpen ? 'grid-rows-[1fr] opacity-100 mt-5' : 'grid-rows-[0fr] opacity-0 print:opacity-100 print:grid-rows-[1fr] print:mt-2'}`}>
                <div className="overflow-hidden">
                   <div className="bg-black/40 rounded border border-stone-700/50 p-4 md:p-5 relative print:bg-white print:border-l-2 print:border-gray-300 print:border-t-0 print:border-r-0 print:border-b-0 print:rounded-none print:pl-4 print:py-0">
                      <div className="absolute top-0 left-0 bottom-0 w-1.5 bg-amber-500/60 rounded-l print:hidden"></div>
                      
-                     {/* Resources Section */}
                      <div className="flex items-center gap-2 mb-4 text-amber-500 print:text-black print:mb-2">
                         <ListChecks className="w-5 h-5 print:hidden" />
                         <span className="text-sm font-bold uppercase tracking-widest">Матеріали</span>
@@ -185,7 +172,6 @@ const ScheduleItem: React.FC<{ module: TrainingModule; isLast: boolean }> = ({ m
                         <p className="text-stone-500 italic print:text-black">Інформація відсутня.</p>
                      )}
 
-                     {/* Quiz Section (If questions exist) */}
                      {module.questions && module.questions.length > 0 && (
                         <QuizBlock questions={module.questions} />
                      )}
@@ -219,7 +205,6 @@ const DayCard: React.FC<{ day: TrainingDay }> = ({ day }) => {
 
   return (
     <div className="bg-stone-900 border border-stone-800 rounded-lg overflow-hidden mb-6 shadow-lg shadow-black/40 break-inside-avoid print:bg-white print:border-2 print:border-black print:shadow-none print:mb-8">
-      {/* Day Header */}
       <div className="bg-stone-800/50 p-4 border-b border-stone-700 flex flex-col md:flex-row md:items-center justify-between gap-3 print:bg-white print:border-b print:border-black">
         <div>
           <h3 className="text-xl font-bold text-amber-500 font-mono flex items-center gap-2 print:text-black">
@@ -253,7 +238,6 @@ const DayCard: React.FC<{ day: TrainingDay }> = ({ day }) => {
       </div>
 
       <div className="p-4 md:p-6">
-        {/* Safety Warning */}
         <div className="mb-6 bg-red-950/20 border-l-4 border-red-600/80 p-3 md:p-4 rounded-r flex items-start gap-3 print:bg-white print:border-red-600 print:border">
           <ShieldAlert className="w-6 h-6 text-red-500 shrink-0 mt-0.5 print:text-red-600" />
           <div>
@@ -262,9 +246,7 @@ const DayCard: React.FC<{ day: TrainingDay }> = ({ day }) => {
           </div>
         </div>
 
-        {/* Schedule */}
         <div className="space-y-4 md:space-y-0 md:relative">
-            {/* Desktop Timeline Line */}
             <div className="absolute left-[85px] top-2 bottom-2 w-0.5 bg-stone-800 hidden md:block print:bg-gray-300"></div>
             
             {day.schedule.map((module, idx) => (
@@ -313,7 +295,6 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = ({ plan, onReset, onOpenS
     {isExamMode && <ExamView plan={plan} onClose={() => setIsExamMode(false)} />}
     <div className={`max-w-4xl mx-auto pb-20 animate-in fade-in slide-in-from-bottom-4 duration-700 print:pb-0 print:max-w-none print:w-full ${isExamMode ? 'blur-sm pointer-events-none' : ''}`}>
       
-      {/* Offline Alert Banner */}
       {plan.isOffline && (
         <div className="mb-6 bg-amber-500/10 border border-amber-500/50 rounded-lg p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 print:hidden">
             <div className="flex items-start gap-3">
@@ -335,14 +316,12 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = ({ plan, onReset, onOpenS
         </div>
       )}
 
-      {/* Header & Actions */}
       <div className="mb-6 md:mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-stone-800 pb-6 print:border-none print:mb-4">
         <div>
           <h2 className="text-2xl md:text-3xl font-bold text-stone-100 mb-3 print:text-black">{plan.title}</h2>
           <p className="text-stone-400 text-sm md:text-base max-w-2xl leading-relaxed print:text-black">{plan.overview}</p>
         </div>
         
-        {/* Buttons: Stacked on mobile, Row on desktop */}
         <div className="flex flex-col sm:flex-row gap-3 print:hidden w-full md:w-auto">
             <button 
                 onClick={onReset}
@@ -382,14 +361,12 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = ({ plan, onReset, onOpenS
         </div>
       </div>
 
-      {/* Days Loop */}
       <div className="space-y-4">
         {plan.days.map((day) => (
           <DayCard key={day.dayNumber} day={day} />
         ))}
       </div>
       
-      {/* Print Footer Hint */}
       <div className="text-center mt-12 text-stone-600 text-sm print:hidden">
          <div className="flex items-center justify-center gap-2 mb-2">
             <Printer className="w-4 h-4" />

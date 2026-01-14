@@ -13,7 +13,6 @@ export const ExamView: React.FC<ExamViewProps> = ({ plan, onClose }) => {
   const [showAnswer, setShowAnswer] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
 
-  // Extract and shuffle questions on mount
   useEffect(() => {
     const allQuestions: QuizItem[] = [];
     plan.days.forEach(day => {
@@ -23,7 +22,6 @@ export const ExamView: React.FC<ExamViewProps> = ({ plan, onClose }) => {
         }
       });
     });
-    // Shuffle
     setQuestions(allQuestions.sort(() => Math.random() - 0.5));
   }, [plan]);
 
@@ -48,7 +46,6 @@ export const ExamView: React.FC<ExamViewProps> = ({ plan, onClose }) => {
   return (
     <div className="fixed inset-0 z-[100] bg-stone-950 flex flex-col items-center justify-center p-4 animate-in fade-in zoom-in duration-300">
       
-      {/* Header */}
       <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center bg-stone-900/50 backdrop-blur-md border-b border-stone-800">
         <div className="flex items-center gap-2 text-amber-500 font-mono font-bold">
             <BrainCircuit className="w-5 h-5" />
@@ -62,11 +59,9 @@ export const ExamView: React.FC<ExamViewProps> = ({ plan, onClose }) => {
         </button>
       </div>
 
-      {/* Content */}
       <div className="w-full max-w-lg relative">
         {!isFinished ? (
             <div className="relative">
-                {/* Progress Bar */}
                 <div className="mb-6 flex items-center justify-between text-xs font-mono text-stone-500 uppercase tracking-widest">
                     <span>Питання {currentIndex + 1} з {questions.length}</span>
                     <div className="flex gap-1">
@@ -76,7 +71,6 @@ export const ExamView: React.FC<ExamViewProps> = ({ plan, onClose }) => {
                     </div>
                 </div>
 
-                {/* Card */}
                 <div 
                     className="bg-stone-900 border border-stone-700 rounded-2xl p-6 md:p-10 min-h-[300px] flex flex-col items-center justify-center text-center shadow-2xl shadow-black relative overflow-hidden"
                     onClick={() => setShowAnswer(!showAnswer)}
@@ -103,7 +97,6 @@ export const ExamView: React.FC<ExamViewProps> = ({ plan, onClose }) => {
                     )}
                 </div>
 
-                {/* Controls */}
                 <div className="mt-8 flex gap-4 justify-center">
                     <button 
                         onClick={handlePrev}

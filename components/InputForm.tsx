@@ -17,12 +17,11 @@ const LOADING_MESSAGES = [
 ];
 
 export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading }) => {
-  const [duration, setDuration] = useState<number>(5); // Повернуто 5 днів за замовчуванням
+  const [duration, setDuration] = useState<number>(5);
   const [level, setLevel] = useState<ExperienceLevel>(ExperienceLevel.NOVICE);
   const [notes, setNotes] = useState<string>('');
   const [loadingMsgIndex, setLoadingMsgIndex] = useState(0);
   
-  // ОНОВЛЕНО: Дефолтні теми під реальний запит (Скиди, Взаємодія з пташкою)
   const [selectedTopics, setSelectedTopics] = useState<string[]>([
     "Фортифікація: Бліндажі та 'Лисячі нори'",
     "ВНП РФ та Мінна безпека (ПМН/ОЗМ)",
@@ -30,7 +29,6 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading }) => 
     "Робота під 'Пташкою' (Коригування по рації)"
   ]);
 
-  // Ефект для зміни повідомлень завантаження
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
     if (isLoading) {
@@ -50,16 +48,13 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading }) => 
     );
   };
 
-  // Логіка перемикання цілої категорії
   const toggleCategoryBlock = (categoryTopics: string[]) => {
     const selectedCount = categoryTopics.filter(t => selectedTopics.includes(t)).length;
     const isCategoryActive = selectedCount > 0;
 
     if (isCategoryActive) {
-        // Якщо активна -> вимикаємо повністю
         setSelectedTopics(prev => prev.filter(t => !categoryTopics.includes(t)));
     } else {
-        // Якщо вимкнена -> вмикаємо повністю
         const newTopics = [...selectedTopics];
         categoryTopics.forEach(t => {
             if (!newTopics.includes(t)) newTopics.push(t);
@@ -93,7 +88,6 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading }) => 
 
       <form onSubmit={handleSubmit} className="space-y-6 md:space-y-8">
         
-        {/* Duration & Level Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
           <div className="space-y-2">
             <label className="block text-sm font-medium text-stone-300">Тривалість (днів)</label>
@@ -121,7 +115,6 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading }) => 
           </div>
         </div>
 
-        {/* Categories Blocks */}
         <div className="space-y-3 md:space-y-4">
           <div className="flex items-center justify-between">
               <label className="block text-sm font-medium text-stone-300">Напрямки підготовки</label>
@@ -142,14 +135,12 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading }) => 
                         : 'bg-stone-950/30 border-stone-800'
                     }`}
                 >
-                    {/* Category Header (Main Toggle) */}
                     <button
                         type="button"
                         onClick={() => toggleCategoryBlock(category.topics)}
                         className="w-full px-4 py-4 flex items-center justify-between group outline-none active:bg-stone-800/50 transition-colors"
                     >
                         <div className="flex items-center gap-3 md:gap-4 overflow-hidden">
-                            {/* Checkbox Icon */}
                             <div className={`shrink-0 transition-colors ${isCategoryActive ? 'text-amber-500' : 'text-stone-600'}`}>
                                 {isCategoryActive ? <SquareCheck className="w-6 h-6 fill-amber-500/10" /> : <Square className="w-6 h-6" />}
                             </div>
@@ -169,13 +160,11 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading }) => 
                             </div>
                         </div>
 
-                        {/* Chevron */}
                         <div className={`shrink-0 text-stone-600 transition-transform duration-300 ml-2 ${isCategoryActive ? 'rotate-180 text-amber-500' : ''}`}>
                             <ChevronDown className="w-5 h-5" />
                         </div>
                     </button>
 
-                    {/* Topics Grid (Visible only if active) */}
                     {isCategoryActive && (
                         <div className="border-t border-stone-800/50 p-2 md:p-3 bg-black/20 animate-in slide-in-from-top-2 duration-200">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -209,7 +198,6 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading }) => 
           </div>
         </div>
 
-        {/* Custom Notes */}
         <div className="space-y-2">
            <label className="block text-sm font-medium text-stone-300">Коментар для інструктора</label>
            <textarea
@@ -220,7 +208,6 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading }) => 
            />
         </div>
 
-        {/* Submit Action */}
         <div className="sticky bottom-4 md:static z-10">
             <button
                 type="submit"

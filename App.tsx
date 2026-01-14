@@ -40,12 +40,10 @@ const App: React.FC = () => {
   }, []);
 
   const handleFormSubmit = async (data: TrainingFormData) => {
-    // 1. Перевіряємо чи є ключ взагалі (в сховищі або в env)
     const storedKey = localStorage.getItem(API_KEY_STORAGE);
     const envKey = process.env.API_KEY;
     const hasValidKey = (storedKey && storedKey.trim().length > 0) || (envKey && envKey.trim().length > 0);
 
-    // 2. Якщо ключа немає - змушуємо ввести
     if (!hasValidKey) {
         setShowSettings(true);
         setError("Для початку роботи необхідно ввести API Key.");
@@ -57,11 +55,9 @@ const App: React.FC = () => {
     try {
       const generatedPlan = await generateTrainingPlan(data);
       setPlan(generatedPlan);
-      // Save to local storage
       localStorage.setItem(STORAGE_KEY, JSON.stringify(generatedPlan));
     } catch (err: any) {
       setError(err.message || "Виникла помилка при генерації плану. Перевірте API ключ.");
-      // Якщо помилка пов'язана з доступом, відкриваємо налаштування
       if (err.message && (err.message.includes("403") || err.message.includes("400") || err.message.includes("КЛЮЧ"))) {
           setShowSettings(true);
       }
@@ -86,14 +82,12 @@ const App: React.FC = () => {
         localStorage.setItem(API_KEY_STORAGE, userApiKey.trim());
     }
     setShowSettings(false);
-    // Скидаємо статус перевірки при закритті
     setKeyStatus('idle');
     setKeyErrorMsg('');
-    setError(null); // Очищаємо старі помилки
+    setError(null);
   };
   
   const checkConnection = async () => {
-    // Якщо поле пусте, перевіряємо чи є hardcoded ключ
     const keyToTest = userApiKey.trim() || process.env.API_KEY;
     
     if (!keyToTest) {
@@ -120,7 +114,6 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-stone-950 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-stone-900 via-stone-950 to-stone-950 text-stone-200">
       
-      {/* Settings Modal */}
       {showSettings && (
         <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
             <div className="bg-stone-900 border border-stone-700 rounded-xl w-full max-w-md shadow-2xl relative overflow-hidden">
@@ -187,7 +180,6 @@ const App: React.FC = () => {
                         )}
                     </div>
                     
-                    {/* Key Validation Feedback */}
                     {keyStatus === 'valid' && (
                         <div className="mb-4 p-3 bg-emerald-950/20 border border-emerald-900/50 rounded-lg flex items-center gap-2 text-emerald-400 text-sm animate-in fade-in slide-in-from-top-2">
                             <CheckCircle2 className="w-4 h-4 shrink-0" />
@@ -230,11 +222,9 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Navbar */}
       <header className="border-b border-stone-800 bg-stone-950/80 backdrop-blur-md sticky top-0 z-50 shadow-md print:hidden">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center select-none">
-            {/* SapperHub Style Logo */}
             <div className="flex items-center tracking-tighter font-bold text-2xl md:text-3xl">
                 <span className="text-white">Sapper</span>
                 <span className="bg-[#FF9900] text-black px-2 py-0.5 rounded ml-0.5 border border-[#FF9900] shadow-[0_0_10px_rgba(255,153,0,0.3)]">Hub</span>
@@ -262,10 +252,8 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="max-w-6xl mx-auto px-3 md:px-4 py-6 md:py-12 print:py-0 print:px-0 print:max-w-none">
         
-        {/* Error Banner */}
         {error && (
             <div className="max-w-3xl mx-auto mb-8 bg-red-950/20 border border-red-900/50 p-4 rounded-lg flex items-start gap-3 text-red-400 animate-in fade-in slide-in-from-top-2 shadow-lg shadow-red-900/10">
                 <TriangleAlert className="w-5 h-5 shrink-0 mt-0.5" />
@@ -304,7 +292,6 @@ const App: React.FC = () => {
 
       </main>
 
-      {/* Footer */}
       <footer className="border-t border-stone-900 py-6 md:py-8 mt-auto text-center px-4 print:hidden">
         <p className="text-stone-600 text-xs md:text-sm">
             © {new Date().getFullYear()} SapperHub v1.0.3. ПРИЗНАЧЕНО ДЛЯ СЛУЖБОВОГО КОРИСТУВАННЯ.
