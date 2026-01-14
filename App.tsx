@@ -13,16 +13,13 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   
-  // Settings Modal State
   const [showSettings, setShowSettings] = useState(false);
   const [userApiKey, setUserApiKey] = useState('');
   
-  // Key Validation State
   const [checkingKey, setCheckingKey] = useState(false);
   const [keyStatus, setKeyStatus] = useState<'idle' | 'valid' | 'invalid'>('idle');
   const [keyErrorMsg, setKeyErrorMsg] = useState('');
 
-  // Load from local storage on mount
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
@@ -34,7 +31,6 @@ const App: React.FC = () => {
         }
     }
     
-    // Load saved API key
     const savedKey = localStorage.getItem(API_KEY_STORAGE);
     if (savedKey) setUserApiKey(savedKey);
   }, []);

@@ -2,18 +2,18 @@ import { GoogleGenAI } from "@google/genai";
 import { TrainingFormData, TrainingPlanResponse, TrainingDay, TrainingModule } from "./types";
 
 // ==========================================
-// 1. CONFIG & MODELS
+// 1. КОНФІГУРАЦІЯ ТА МОДЕЛІ
 // ==========================================
 
 const AVAILABLE_MODELS = [
   'gemini-2.0-flash',      // Найновіша стабільна версія (Пріоритет)
-  'gemini-1.5-flash',      // Надійна "робоча конячка" (Резерв)
+  'gemini-1.5-flash',      // Надійна версія (Резерв)
   'gemini-1.5-flash-8b',   // Швидка легка версія
   'gemini-2.0-flash-exp'   // Експериментальна
 ];
 
 // ==========================================
-// 2. FALLBACK DATABASE (OFFLINE MODE ONLY)
+// 2. РЕЗЕРВНА БАЗА ДАНИХ (ОФЛАЙН РЕЖИМ)
 // ==========================================
 const FALLBACK_DB: Record<string, TrainingModule[]> = {
   "Engineering": [
@@ -102,7 +102,7 @@ const generateFallbackPlan = (data: TrainingFormData): TrainingPlanResponse => {
 };
 
 // ==========================================
-// 3. AI GENERATION LOGIC (MAIN)
+// 3. ЛОГІКА ГЕНЕРАЦІЇ (MAIN)
 // ==========================================
 
 export const generateTrainingPlan = async (data: TrainingFormData): Promise<TrainingPlanResponse> => {
