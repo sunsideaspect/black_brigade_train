@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { TrainingPlanResponse, TrainingDay, TrainingModule, QuizItem } from '../types';
-import { Download, ShieldAlert, BookOpen, Hammer, Zap, RotateCcw, Printer, ChevronDown, ListChecks, Copy, Check, ExternalLink, Search, HelpCircle, Eye, ClipboardList, BrainCircuit, FileDown } from 'lucide-react';
+import { Download, ShieldAlert, BookOpen, Hammer, Zap, RotateCcw, Printer, ChevronDown, ListChecks, Copy, Check, ExternalLink, Search, HelpCircle, Eye, ClipboardList, BrainCircuit, FileDown, WifiOff, Settings } from 'lucide-react';
 import { ExamView } from './ExamView';
 
 interface PlanDisplayProps {
   plan: TrainingPlanResponse;
   onReset: () => void;
+  onOpenSettings: () => void;
 }
 
 const ModuleIcon = ({ type }: { type: string }) => {
@@ -279,7 +280,7 @@ const DayCard: React.FC<{ day: TrainingDay }> = ({ day }) => {
   );
 };
 
-export const PlanDisplay: React.FC<PlanDisplayProps> = ({ plan, onReset }) => {
+export const PlanDisplay: React.FC<PlanDisplayProps> = ({ plan, onReset, onOpenSettings }) => {
   const [copiedAll, setCopiedAll] = useState(false);
   const [isExamMode, setIsExamMode] = useState(false);
 
@@ -312,6 +313,28 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = ({ plan, onReset }) => {
     {isExamMode && <ExamView plan={plan} onClose={() => setIsExamMode(false)} />}
     <div className={`max-w-4xl mx-auto pb-20 animate-in fade-in slide-in-from-bottom-4 duration-700 print:pb-0 print:max-w-none print:w-full ${isExamMode ? 'blur-sm pointer-events-none' : ''}`}>
       
+      {/* Offline Alert Banner */}
+      {plan.isOffline && (
+        <div className="mb-6 bg-amber-500/10 border border-amber-500/50 rounded-lg p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 print:hidden">
+            <div className="flex items-start gap-3">
+                <div className="p-2 bg-amber-500/20 rounded-full shrink-0">
+                    <WifiOff className="w-5 h-5 text-amber-500" />
+                </div>
+                <div>
+                    <h3 className="text-amber-200 font-bold text-sm uppercase">Автономний режим</h3>
+                    <p className="text-amber-500/80 text-sm">Зв'язок з ШІ відсутній. Показано шаблонний план.</p>
+                </div>
+            </div>
+            <button 
+                onClick={onOpenSettings}
+                className="w-full md:w-auto px-4 py-2 bg-amber-900/40 hover:bg-amber-900/60 text-amber-200 text-sm font-medium rounded border border-amber-500/30 flex items-center justify-center gap-2 transition-colors"
+            >
+                <Settings className="w-4 h-4" />
+                Налаштувати API
+            </button>
+        </div>
+      )}
+
       {/* Header & Actions */}
       <div className="mb-6 md:mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-stone-800 pb-6 print:border-none print:mb-4">
         <div>

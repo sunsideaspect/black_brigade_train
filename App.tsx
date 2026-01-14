@@ -243,7 +243,11 @@ const App: React.FC = () => {
                 <InputForm onSubmit={handleFormSubmit} isLoading={loading} />
             </div>
         ) : (
-            <PlanDisplay plan={plan} onReset={handleReset} />
+            <PlanDisplay 
+                plan={plan} 
+                onReset={handleReset} 
+                onOpenSettings={() => setShowSettings(true)}
+            />
         )}
 
       </main>

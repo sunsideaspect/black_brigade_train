@@ -97,6 +97,7 @@ export interface TrainingPlanResponse {
   title: string;
   overview: string;
   days: TrainingDay[];
+  isOffline?: boolean; // Прапорець для позначення режиму
 }
 
 export interface TrainingFormData {
