@@ -35,6 +35,110 @@ const TOPIC_DETAILS: Record<string, string> = {
 
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Статичний план для Fallback режиму (коли немає квоти)
+const FALLBACK_PLAN: TrainingPlanResponse = {
+  title: "⚠️ РЕЗЕРВНИЙ ПЛАН (OFFLINE MODE)",
+  overview: "Увага! Сервери Google зараз перевантажені (помилка 429). Щоб ви могли протестувати додаток, завантажено цей демонстраційний план. Він містить реальні протоколи, але не налаштований під ваш запит.",
+  days: [
+    {
+      dayNumber: 1,
+      theme: "Мінна безпека та основи БПЛА",
+      objectives: ["Вивчення ПМН/ОЗМ", "Захист від скидів"],
+      safetyNotes: "Робота виключно з ММГ (макетами). Дотримання дистанцій.",
+      schedule: [
+        {
+          time: "08:00 - 10:00",
+          subject: "Інженерні боєприпаси армії РФ",
+          description: "ТТХ та принцип дії основних протипіхотних мін (ПМН-2, ПМН-4, ПОМ-3).",
+          type: "Theory",
+          instructorTips: [
+            "ПМН-4: датчик цілі не знімається",
+            "ПОМ-3: сейсмічний датчик, не підходити ближче 15м",
+            "ОЗМ-72: радіус суцільного ураження 25м"
+          ],
+          questions: [
+            { question: "Час самоліквідації ПОМ-3?", answer: "8 або 24 години" },
+            { question: "Зусилля спрацювання ПМН-4?", answer: "0.2 - 5 кг (дуже чутлива)" },
+            { question: "Радіус ураження ПМН-2?", answer: "Відрив стопи (локально)" }
+          ]
+        },
+        {
+          time: "10:15 - 13:00",
+          subject: "Практика: Пошук та маркування",
+          description: "Відпрацювання проходу 'змійкою' з щупом. Маркування виявлених ВНП.",
+          type: "Practice",
+          instructorTips: [
+            "Кут входження щупа - 30-45 градусів",
+            "Крок пошуку - не більше 5 см",
+            "Маркування: добре видно своїм, не видно ворогу"
+          ],
+          questions: [
+            { question: "Глибина перевірки щупом?", answer: "10-15 см" },
+            { question: "Що робити, якщо щуп вперся у тверде?", answer: "Стоп. Оглянути. Не тиснути." },
+            { question: "Ширина проходу для групи?", answer: "Не менше 0.5 - 1 метра" }
+          ]
+        },
+        {
+          time: "14:00 - 16:00",
+          subject: "Протидія БПЛА (Мавік/FPV)",
+          description: "Дії групи при виявленні дрона. Маскування позиції.",
+          type: "Drill",
+          instructorTips: [
+            "Мавік зависає перед скидом",
+            "FPV летить по прямій в ціль",
+            "Не дивитись вгору відкритим обличчям"
+          ],
+          questions: [
+            { question: "Основна ознака підготовки до скиду?", answer: "Дрон зупинився і завис" },
+            { question: "Дії при звуці FPV?", answer: "Ривок в сторону/укриття, падіння" },
+            { question: "Чи стріляти по дрону зі стрілецької?", answer: "Тільки якщо він атакує вас. Інакше - демаскування." }
+          ]
+        }
+      ]
+    },
+    {
+      dayNumber: 2,
+      theme: "Тактична медицина та евакуація",
+      objectives: ["Самодопомога", "Евакуація без нош"],
+      safetyNotes: "Працювати в рукавицях. Імітація крові.",
+      schedule: [
+         {
+          time: "08:00 - 10:00",
+          subject: "Алгоритм MARCH (M)",
+          description: "Масивні кровотечі. Накладання турнікету собі (одною рукою) та побратиму.",
+          type: "Practice",
+          instructorTips: [
+            "Час накладання - до 30 сек",
+            "Перевірка пульсу після затягування",
+            "Напис часу на турнікеті"
+          ],
+          questions: [
+            { question: "Де накладати турнікет в червоній зоні?", answer: "Максимально високо на кінцівку" },
+            { question: "Критерій правильного накладання?", answer: "Відсутність пульсу на периферії" },
+            { question: "Що робити після накладання?", answer: "В укриття / до зброї" }
+          ]
+        },
+        {
+          time: "10:15 - 13:00",
+          subject: "Евакуація під вогнем",
+          description: "Використання строп, волокуш, евакуація 'під пахви'.",
+          type: "Drill",
+          instructorTips: [
+            "Голова пораненого в сторону руху",
+            "Зброя пораненого залишається з ним",
+            "Синхронізація дій групи евакуації"
+          ],
+          questions: [
+            { question: "Найбезпечніший спосіб транспортування?", answer: "Повзком (волокуші)" },
+            { question: "Хто прикриває евакуацію?", answer: "Вільні стрільці / кулеметник" },
+            { question: "Як кріпити карабін стропи?", answer: "За евакуаційну петлю бронежилета" }
+          ]
+        }
+      ]
+    }
+  ]
+};
+
 export const generateTrainingPlan = async (data: TrainingFormData): Promise<TrainingPlanResponse> => {
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
@@ -48,7 +152,6 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
     return `ТЕМА: ${topic}. СУТЬ: ${detail}`;
   }).join("\n");
 
-  // Оптимізований промпт для економії токенів
   const prompt = `
     РОЛЬ: Інструктор саперної роти ЗСУ.
     ЗАВДАННЯ: Розклад занять на ${data.durationDays} дн.
@@ -59,20 +162,23 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
 
     ВИМОГИ:
     1. Структура: День -> Тема -> Розклад.
-    2. Конкретика: В "instructorTips" пиши ТТХ (вага, радіус) та короткі поради. Без води.
-    3. Тест: Додай масив "questions" (РІВНО 3 питання) до кожного заняття. Питання практичні. Відповідь коротка.
+    2. Конкретика: В "instructorTips" пиши ТТХ і поради. Без води.
+    3. Тест: Додай "questions" (РІВНО 3 питання) до кожного заняття.
 
     МОВА: Українська (військова).
   `;
 
-  // Пріоритет на стабільну модель 1.5-flash, яка має вищі ліміти для Free Tier
   const MODELS_TO_TRY = [
-    'gemini-1.5-flash',      // Найстабільніша для Free Tier (15 RPM)
-    'gemini-1.5-flash-8b',   // Дуже швидка і легка
-    'gemini-2.0-flash-exp'   // Розумна, але часто перевантажена
+    'gemini-1.5-flash-8b',  // Найлегша модель, найменший шанс 429
+    'gemini-1.5-flash'      // Стандартна
   ];
 
   const generateWithRetry = async (attempt = 0): Promise<string> => {
+    // Якщо спроби вичерпано, кидаємо помилку, яку спіймає зовнішній catch і поверне FALLBACK_PLAN
+    if (attempt >= MODELS_TO_TRY.length + 1) {
+        throw new Error("All retries failed");
+    }
+
     const modelName = MODELS_TO_TRY[attempt % MODELS_TO_TRY.length];
     
     try {
@@ -82,8 +188,7 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
         model: modelName,
         contents: prompt,
         config: {
-          // Відключаємо пошук повністю, це головна причина 429
-          systemInstruction: "Ти досвідчений сапер. Пиши коротко, чітко, по-військовому. Використовуй JSON.",
+          systemInstruction: "Ти досвідчений сапер. Пиши JSON.",
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -113,7 +218,7 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
                           instructorTips: { 
                             type: Type.ARRAY,
                             items: { type: Type.STRING },
-                            description: "3-4 пункти ТТХ або порад"
+                            description: "ТТХ або поради"
                           },
                           questions: {
                             type: Type.ARRAY,
@@ -125,7 +230,7 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
                               },
                               required: ["question", "answer"]
                             },
-                            description: "Рівно 3 питання"
+                            description: "3 питання"
                           },
                           type: { 
                             type: Type.STRING, 
@@ -150,22 +255,11 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
       return text;
 
     } catch (err: any) {
-      const errorMsg = err.toString().toLowerCase();
-      console.warn(`Error with ${modelName}:`, errorMsg);
-
-      const isQuotaError = errorMsg.includes("429") || errorMsg.includes("quota") || errorMsg.includes("exhausted");
-      const isOverloaded = errorMsg.includes("503") || errorMsg.includes("overloaded");
-
-      // Якщо помилка квоти, робимо довшу паузу
-      if ((isQuotaError || isOverloaded) && attempt < 5) {
-        // Збільшуємо час очікування: 4с, 8с, 12с...
-        const delay = 4000 * (attempt + 1); 
-        console.warn(`Quota hit. Waiting ${delay/1000}s before retry...`);
-        await wait(delay);
-        return generateWithRetry(attempt + 1);
-      }
+      console.warn(`Error with ${modelName}:`, err.toString());
       
-      throw err;
+      // Швидка пауза перед наступною спробою
+      await wait(2000);
+      return generateWithRetry(attempt + 1);
     }
   };
 
@@ -174,14 +268,8 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
     return JSON.parse(jsonText) as TrainingPlanResponse;
 
   } catch (error: any) {
-    console.error("Gemini API Fatal Error:", error);
-    
-    const errorString = error.message || error.toString();
-    
-    if (errorString.includes("429") || errorString.includes("quota")) {
-       throw new Error("⏳ Сервери Google перевантажені запитами (429). Спробуйте зменшити кількість днів у плані або зачекайте 5 хвилин.");
-    }
-    
-    throw new Error("⚠️ Не вдалося згенерувати план. Спробуйте ще раз.");
+    console.error("Gemini API Error (Using Fallback):", error);
+    // ПОВЕРТАЄМО РЕЗЕРВНИЙ ПЛАН ЗАМІСТЬ ПОМИЛКИ
+    return FALLBACK_PLAN;
   }
 };
