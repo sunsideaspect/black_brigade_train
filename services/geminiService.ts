@@ -35,17 +35,46 @@ const TOPIC_DETAILS: Record<string, string> = {
 
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Функція для перевірки ключа з UI
+// Список моделей для використання (спільний для генерації та перевірки)
+const AVAILABLE_MODELS = [
+  'gemini-1.5-flash',
+  'gemini-2.0-flash-exp', 
+  'gemini-1.5-flash-8b',
+  'gemini-1.5-pro'
+];
+
+// ОНОВЛЕНО: Функція перевірки тепер теж перебирає моделі, щоб уникнути помилкових 404
 export const validateApiKey = async (apiKey: string): Promise<void> => {
   const ai = new GoogleGenAI({ apiKey });
-  try {
-    // Робимо максимально простий запит для тесту
-    await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
-      contents: 'Ping',
-    });
-  } catch (error: any) {
-    throw error;
+  
+  let lastError: any = null;
+  let success = false;
+
+  for (const model of AVAILABLE_MODELS) {
+    try {
+      await ai.models.generateContent({
+        model: model,
+        contents: 'Ping',
+      });
+      success = true;
+      break; // Якщо спрацювало - виходимо з циклу, ключ робочий
+    } catch (error: any) {
+      lastError = error;
+      const msg = error.message || '';
+      
+      // Якщо це помилка авторизації (403 або API key invalid), немає сенсу пробувати інші моделі
+      if (msg.includes('403') || msg.includes('API key') || msg.includes('key not valid')) {
+         throw new Error("Цей ключ недійсний або заблокований (Error 403). Перевірте правильність.");
+      }
+      
+      // Якщо це 404 (модель не знайдена) або 429 (ліміт), пробуємо наступну модель
+      console.warn(`Validation skipped for ${model}:`, msg);
+    }
+  }
+
+  if (!success) {
+     // Якщо жодна модель не відповіла
+     throw new Error(`Не вдалося перевірити ключ. Остання помилка: ${lastError?.message || 'Сервери недоступні'}`);
   }
 };
 
@@ -312,28 +341,18 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
     МОВА: Українська (військова).
   `;
 
-  // ПОВЕРНУТО: gemini-1.5-flash на перше місце. Це найнадійніша модель для стабільних версій.
-  // gemini-2.0-flash-exp може бути нестабільною в деяких регіонах.
-  const MODELS_TO_TRY = [
-    'gemini-1.5-flash',
-    'gemini-2.0-flash-exp', 
-    'gemini-1.5-flash-8b'
-  ];
-
   // Змінна для збереження помилки від ОСНОВНОЇ моделі.
-  // Якщо всі впадуть, ми покажемо саме цю помилку, а не останню.
   let primaryError: Error | null = null;
 
   const generateWithRetry = async (attempt = 0): Promise<string> => {
     // Якщо спроби вичерпано
-    if (attempt >= MODELS_TO_TRY.length) {
-        // Якщо ми спіймали помилку від основної моделі, кидаємо її (вона найбільш інформативна)
+    if (attempt >= AVAILABLE_MODELS.length) {
+        // Якщо ми спіймали помилку від основної моделі, кидаємо її
         if (primaryError) throw primaryError;
-        
         throw new Error("Не вдалося підключитися до серверів Google. Перевірте ключ.");
     }
 
-    const modelName = MODELS_TO_TRY[attempt];
+    const modelName = AVAILABLE_MODELS[attempt];
     
     try {
       console.log(`Generating plan... Model: ${modelName} (Attempt ${attempt + 1})`);
@@ -413,13 +432,11 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
       
       const errorMessage = err.message || '';
       
-      // Якщо це основна модель - запам'ятовуємо помилку
       if (modelName === 'gemini-1.5-flash') {
           primaryError = err;
       }
       
       // Якщо помилка явно про авторизацію і це власний ключ - немає сенсу перебирати інші моделі.
-      // 403 Forbidden або 400 Bad Request (API Key invalid)
       if (isCustomKey && (errorMessage.includes('403') || errorMessage.includes('API key') || errorMessage.includes('key not valid'))) {
          throw new Error(`Ваш API ключ недійсний (Error 403). Перевірте правильність вводу.`);
       }
