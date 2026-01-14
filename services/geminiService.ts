@@ -1,465 +1,236 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { TrainingFormData, TrainingPlanResponse } from "../types";
+import { TrainingFormData, TrainingPlanResponse, TrainingDay, TrainingModule, QuizItem, ExperienceLevel } from "../types";
 
-// Жорсткий, реалістичний опис тем для умов повномасштабної війни
-const TOPIC_DETAILS: Record<string, string> = {
-  // --- Інженерно-саперна справа ---
-  "Фортифікація: Бліндажі та 'Лисячі нори'": "Правила трьох накатів. Гідроізоляція підручними засобами. Як швидко заритися, коли над головою висить дрон. Обладнання перекритих щілин.",
-  "Інженерні загородження (МЗП/Дріт)": "Встановлення МЗП (Малопомітна Перешкода/путанка). Спіраль Бруно. Експрес-загородження. Як не заплутатися самому під час відходу.",
-  "ВНП РФ та Мінна безпека (ПМН/ОЗМ)": "ПМН-4, ПОМ-3 'Медальйон', ОЗМ-72. Пастки МЛ-7/МЛ-8. Правило: 'Не знаєш - не чіпай'.",
-  "Дистанційне мінування (Земледелие/ПФМ)": "Як виглядають касети КПТМ. 'Пелюстки' (ПФМ-1) в траві. ПОМ-2 'Отек'. Звук відстрілу касет. Дії групи при потраплянні під дистанційне мінування.",
-  "Пророблення проходів (Тропи)": "Створення піших проходів. Робота з щупом та кішкою. Маркування 'стежки життя' для піхоти, яке не світиться для ворога.",
-  "Підривна справа (Розрахунок зарядів)": "В'язання запальних трубок (ЗТП). Розрахунок тротилу. Електричний спосіб підривання. ТБ при підриві.",
+// ==========================================
+// 1. CONFIG & MODELS
+// ==========================================
 
-  // --- Медицина ---
-  "Самодопомога в червоній зоні": "Турнікет собі одною рукою лежачи. Контроль кровотечі. Дії, коли медик не може підійти.",
-  "Робота з пораненням під обстрілом": "Перев'язка брудними руками. Тампонада. Знебол. Евакуація без нош.",
-  "Переміщення пораненого (волокуші/стропи)": "Евакуація волокушами повзком. Робота стропою з укриття. 'Ривок' тіла в безпечну зону.",
-
-  // --- Тактика / Виживання ---
-  "Маскування від 'Тепла' (Mavic 3T)": "Як працює тепловізор. Антитеплові накидки. Використання рельєфу. Чому не можна дивитися вгору відкритим обличчям.",
-  "Окопування лежачи (під вогнем)": "Швидке риття одиночного окопу лежачи. Маскування свіжої землі. Захист від осколків.",
-  "Антидронові перекриття (Бліндажі)": "Сітки-рабиці, 'мангали'. Захист входу в бліндаж. L-подібні входи.",
-  "Нічна робота (ПНБ/Тепловізори)": "Рух вночі. Світломаскування рацій. Робота 'двійками' в темряві.",
-
-  // --- БПЛА (Реалії) ---
-  "Захист від скидів (Мавік/Аутел)": "Тактика 'зависання' дрона. Характерний звук перед скидом. Чому не можна бігти по прямій. Використання стовбурів дерев як захисту.",
-  "Дії при атаці FPV (Маневр/Укриття)": "Звук наближення (вищання). Різкий маневр в останній момент. Падіння обличчям в землю (захист ніг та паху). РЕБ 'рюкзак' (якщо є).",
-  "Робота під 'Пташкою' (Коригування по рації)": "Взаємодія з пілотом. Сліпа довіра командам: 'Стій', 'Лівіше', 'Чисто'. Пілот бачить міни на поверхні краще за тебе.",
-  "Акустичне виявлення (На слух)": "Як на слух відрізнити: Мавік (дзижчить), FPV (вищить як болгарка), Крило (гуде як мопед). Визначення напрямку та відстані.",
-
-  // --- Зв'язок ---
-  "Радіодисципліна та шифрування": "Короткі команди. Таблиця позивних. Чому ворог слухає 'Баофенги'.",
-  "Прошивка та аварійне скидання": "Як стерти рацію при загрозі полону."
-};
-
-const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-// Список моделей для використання (спільний для генерації та перевірки)
 const AVAILABLE_MODELS = [
   'gemini-1.5-flash',
-  'gemini-2.0-flash-exp', 
-  'gemini-1.5-flash-8b',
-  'gemini-1.5-pro'
+  'gemini-2.0-flash-exp',
+  'gemini-1.5-flash-8b'
 ];
 
-// ОНОВЛЕНО: Функція перевірки тепер теж перебирає моделі, щоб уникнути помилкових 404
-export const validateApiKey = async (apiKey: string): Promise<void> => {
-  const ai = new GoogleGenAI({ apiKey });
-  
-  let lastError: any = null;
-  let success = false;
+// ==========================================
+// 2. FALLBACK DATABASE (OFFLINE MODE ONLY)
+// ==========================================
+// Використовується ТІЛЬКИ якщо AI недоступний.
 
-  for (const model of AVAILABLE_MODELS) {
-    try {
-      await ai.models.generateContent({
-        model: model,
-        contents: 'Ping',
-      });
-      success = true;
-      break; // Якщо спрацювало - виходимо з циклу, ключ робочий
-    } catch (error: any) {
-      lastError = error;
-      const msg = error.message || '';
-      
-      // Якщо це помилка авторизації (403 або API key invalid), немає сенсу пробувати інші моделі
-      if (msg.includes('403') || msg.includes('API key') || msg.includes('key not valid')) {
-         throw new Error("Цей ключ недійсний або заблокований (Error 403). Перевірте правильність.");
-      }
-      
-      // Якщо це 404 (модель не знайдена) або 429 (ліміт), пробуємо наступну модель
-      console.warn(`Validation skipped for ${model}:`, msg);
+const FALLBACK_DB: Record<string, TrainingModule[]> = {
+  "Engineering": [
+    {
+      time: "08:00 - 10:00",
+      subject: "ТТХ інженерних боєприпасів (ПМН/ОЗМ)",
+      description: "Вивчення макетів. Ознаки встановлення. Принцип дії датчиків цілі.",
+      type: "Theory",
+      instructorTips: ["ПМН-2: час бойового положення 2-10 хв", "ОЗМ-72: радіус 25м"],
+      questions: [{question: "Зусилля спрацювання ПМН-2?", answer: "5-25 кг"}]
+    },
+    {
+      time: "10:15 - 13:00",
+      subject: "Робота з щупом та розмінування",
+      description: "Пророблення проходів. Робота 'кішкою' з укриття.",
+      type: "Practice",
+      instructorTips: ["Крок пошуку 2-3 см", "Кут входження щупа 30 град"],
+      questions: [{question: "Безпечна відстань для кішки?", answer: "30-50 метрів"}]
     }
-  }
-
-  if (!success) {
-     // Якщо жодна модель не відповіла
-     throw new Error(`Не вдалося перевірити ключ. Остання помилка: ${lastError?.message || 'Сервери недоступні'}`);
-  }
-};
-
-// Статичний план для Fallback режиму
-const FALLBACK_PLAN: TrainingPlanResponse = {
-  title: "⚠️ РЕЗЕРВНИЙ ПЛАН (OFFLINE MODE - 5 ДНІВ)",
-  overview: "Увага! Сервери Google зараз перевантажені (помилка 429) або відсутній API ключ. Щоб ви могли протестувати додаток, завантажено цей розширений демонстраційний план.",
-  days: [
+  ],
+  "Tactics": [
     {
-      dayNumber: 1,
-      theme: "Мінна безпека та основи БПЛА",
-      objectives: ["Вивчення ПМН/ОЗМ", "Захист від скидів"],
-      safetyNotes: "Робота виключно з ММГ (макетами). Дотримання дистанцій.",
-      schedule: [
-        {
-          time: "08:00 - 10:00",
-          subject: "Інженерні боєприпаси армії РФ",
-          description: "ТТХ та принцип дії основних протипіхотних мін (ПМН-2, ПМН-4, ПОМ-3).",
-          type: "Theory",
-          instructorTips: [
-            "ПМН-4: датчик цілі не знімається",
-            "ПОМ-3: сейсмічний датчик, не підходити ближче 15м",
-            "ОЗМ-72: радіус суцільного ураження 25м"
-          ],
-          questions: [
-            { question: "Час самоліквідації ПОМ-3?", answer: "8 або 24 години" },
-            { question: "Зусилля спрацювання ПМН-4?", answer: "0.2 - 5 кг (дуже чутлива)" },
-            { question: "Радіус ураження ПМН-2?", answer: "Відрив стопи (локально)" }
-          ]
-        },
-        {
-          time: "10:15 - 13:00",
-          subject: "Практика: Пошук та маркування",
-          description: "Відпрацювання проходу 'змійкою' з щупом. Маркування виявлених ВНП.",
-          type: "Practice",
-          instructorTips: [
-            "Кут входження щупа - 30-45 градусів",
-            "Крок пошуку - не більше 5 см",
-            "Маркування: добре видно своїм, не видно ворогу"
-          ],
-          questions: [
-            { question: "Глибина перевірки щупом?", answer: "10-15 см" },
-            { question: "Що робити, якщо щуп вперся у тверде?", answer: "Стоп. Оглянути. Не тиснути." },
-            { question: "Ширина проходу для групи?", answer: "Не менше 0.5 - 1 метра" }
-          ]
-        },
-        {
-          time: "14:00 - 16:00",
-          subject: "Протидія БПЛА (Мавік/FPV)",
-          description: "Дії групи при виявленні дрона. Маскування позиції.",
-          type: "Drill",
-          instructorTips: [
-            "Мавік зависає перед скидом",
-            "FPV летить по прямій в ціль",
-            "Не дивитись вгору відкритим обличчям"
-          ],
-          questions: [
-            { question: "Основна ознака підготовки до скиду?", answer: "Дрон зупинився і завис" },
-            { question: "Дії при звуці FPV?", answer: "Ривок в сторону/укриття, падіння" },
-            { question: "Чи стріляти по дрону зі стрілецької?", answer: "Тільки якщо він атакує вас. Інакше - демаскування." }
-          ]
-        }
-      ]
-    },
-    // ... Інші дні скорочено для економії місця, вони ідентичні попередньому ...
-    {
-      dayNumber: 2,
-      theme: "Тактична медицина та евакуація",
-      objectives: ["Самодопомога", "Евакуація без нош"],
-      safetyNotes: "Працювати в рукавицях. Імітація крові.",
-      schedule: [
-         {
-          time: "08:00 - 10:00",
-          subject: "Алгоритм MARCH (M)",
-          description: "Масивні кровотечі. Накладання турнікету собі (одною рукою) та побратиму.",
-          type: "Practice",
-          instructorTips: [
-            "Час накладання - до 30 сек",
-            "Перевірка пульсу після затягування",
-            "Напис часу на турнікеті"
-          ],
-          questions: [
-            { question: "Де накладати турнікет в червоній зоні?", answer: "Максимально високо на кінцівку" },
-            { question: "Критерій правильного накладання?", answer: "Відсутність пульсу на периферії" },
-            { question: "Що робити після накладання?", answer: "В укриття / до зброї" }
-          ]
-        },
-        {
-          time: "10:15 - 13:00",
-          subject: "Евакуація під вогнем",
-          description: "Використання строп, волокуш, евакуація 'під пахви'.",
-          type: "Drill",
-          instructorTips: [
-            "Голова пораненого в сторону руху",
-            "Зброя пораненого залишається з ним",
-            "Синхронізація дій групи евакуації"
-          ],
-          questions: [
-            { question: "Найбезпечніший спосіб транспортування?", answer: "Повзком (волокуші)" },
-            { question: "Хто прикриває евакуацію?", answer: "Вільні стрільці / кулеметник" },
-            { question: "Як кріпити карабін стропи?", answer: "За евакуаційну петлю бронежилета" }
-          ]
-        }
-      ]
+      time: "08:00 - 10:00",
+      subject: "Маскування позицій від БПЛА",
+      description: "Принципи антитеплового захисту. Робота в 'зеленці'.",
+      type: "Theory",
+      instructorTips: ["Використовувати природні навіси", "Не дивитись вгору відкритим обличчям"],
+      questions: [{question: "Основний демаскувальний фактор?", answer: "Рух та правильні геометричні форми"}]
     },
     {
-      dayNumber: 3,
-      theme: "Польова фортифікація та маскування",
-      objectives: ["Обладнання позицій", "Антитепловий захист"],
-      safetyNotes: "Робота з шанцевим інструментом. Берегти спину.",
-      schedule: [
-        {
-          time: "08:00 - 10:00",
-          subject: "Окопування лежачи та 'Лисячі нори'",
-          description: "Нормативи на риття. Створення ніш для захисту від артилерії (лисяча нора).",
-          type: "Practice",
-          instructorTips: [
-            "Лисяча нора робиться в бічній стінці окопу",
-            "Глибина - щоб сховатись повністю з бронею",
-            "Маскування викинутого ґрунту (плащ-палатка, трава)"
-          ],
-          questions: [
-            { question: "Головна помилка при окопуванні?", answer: "Високий бруствер, який демаскує" },
-            { question: "Захист від осколків?", answer: "Заглиблення + перекриття" },
-            { question: "Як маскувати свіжу землю?", answer: "Накривати дерном або сіткою одразу" }
-          ]
-        },
-        {
-          time: "10:15 - 13:00",
-          subject: "Побудова бліндажа (Теорія+Макет)",
-          description: "Принцип 3-х накатів. Гідроізоляція. Вхід 'Г-подібний' від вибухової хвилі.",
-          type: "Theory",
-          instructorTips: [
-            "Кожен шар колод - перпендикулярно попередньому",
-            "Між колодами - шар землі/мішків 20см",
-            "Обов'язкова вентиляція (щоб не учадіти)"
-          ],
-          questions: [
-            { question: "Скільки накатів тримає 120мм міну?", answer: "Мінімум 3 шари колод + земля" },
-            { question: "Навіщо Г-подібний вхід?", answer: "Гасить вибухову хвилю та осколки" },
-            { question: "Як захистити вхід від дрона?", answer: "Сітка-рабиця або 'двері' з гуми" }
-          ]
-        }
-      ]
-    },
+      time: "10:15 - 13:00",
+      subject: "Окопування лежачи під вогнем",
+      description: "Норматив №1. Створення укриття за 20 хв.",
+      type: "Practice",
+      instructorTips: ["Починати з ніг", "Зброя готова до бою"],
+      questions: [{question: "Глибина окопу для стрільби лежачи?", answer: "30 см"}]
+    }
+  ],
+  "Medicine": [
     {
-      dayNumber: 4,
-      theme: "Мінні пастки та робота в забудові",
-      objectives: ["Виявлення розтяжок", "Вхід в приміщення"],
-      safetyNotes: "Використовувати тільки учбові підривники.",
-      schedule: [
-        {
-          time: "08:00 - 11:00",
-          subject: "Мінні сюрпризи та розтяжки",
-          description: "Гранати Ф-1 на розтяжці. Міни-пастки МЛ-7. Сюрпризи під побутовими речами.",
-          type: "Practice",
-          instructorTips: [
-            "Дріт розтяжки часто фарбують або палять",
-            "МЛ-7 (розвантажувальна) спрацьовує при піднятті предмета",
-            "Ніколи не перерізати натягнутий дріт (може бути подвійна)"
-          ],
-          questions: [
-            { question: "Що робити, якщо знайшов розтяжку?", answer: "Позначити, обійти, доповісти" },
-            { question: "Чи можна знімати ворожі розтяжки?", answer: "Категорично НІ (тільки підрив на місці)" },
-            { question: "Ознака мінування дверей?", answer: "Сміття, дріт, неприродне положення ручки" }
-          ]
-        },
-        {
-          time: "12:00 - 15:00",
-          subject: "Інженерна розвідка будівлі",
-          description: "Вхід через вікна/проломи. Перевірка кутів. Маркування безпечних кімнат.",
-          type: "Drill",
-          instructorTips: [
-            "Входити там, де ворог не чекає (пролом стіни)",
-            "Не вмикати світло, не відкривати шафи",
-            "Дивитись під ноги (килими, мостини)"
-          ],
-          questions: [
-            { question: "Безпечна відстань від стін?", answer: "Триматись центру (але враховувати сектори)" },
-            { question: "Як відкривати двері?", answer: "З укриття, за допомогою мотузки/кішки" },
-            { question: "Що значить червоний хрест на стіні?", answer: "Небезпечно / заміновано" }
-          ]
-        }
-      ]
-    },
-    {
-      dayNumber: 5,
-      theme: "КОМПЛЕКСНЕ ТАКТИЧНЕ ЗАНЯТТЯ",
-      objectives: ["Іспит", "Злагодження групи"],
-      safetyNotes: "Повна екіпіровка. Імітація бойових умов.",
-      schedule: [
-        {
-          time: "08:00 - 12:00",
-          subject: "Сценарій: 'Вихід на завдання'",
-          description: "Група висувається на позицію. Долає мінне поле (прохід). Обладнує спостережний пункт. Відбиває атаку ДРГ.",
-          type: "Drill",
-          instructorTips: [
-            "Контроль часу виконання",
-            "Радіодисципліна під час руху",
-            "Евакуація умовного пораненого під час відходу"
-          ],
-          questions: [
-            { question: "Дії при обстрілі на мінному полі?", answer: "Впасти на провірену стежку, дими, вогонь у відповідь" },
-            { question: "Хто йде першим?", answer: "Головний дозор (сапер + прикриття)" },
-            { question: "Порядок відходу?", answer: "Відхід перекатами, сапери мінують відхід" }
-          ]
-        },
-        {
-          time: "13:00 - 15:00",
-          subject: "Розбір польотів (Debriefing)",
-          description: "Аналіз помилок. Чистка зброї та спорядження.",
-          type: "Theory",
-          instructorTips: [
-            "Кожен боєць має назвати свою помилку",
-            "Перевірка наявності майна",
-            "Оцінка готовності до реального виходу"
-          ],
-          questions: [
-            { question: "Головна мета навчання?", answer: "Вижити та виконати завдання" },
-            { question: "Що робити з невикористаним БК?", answer: "Здати або обслужити" },
-            { question: "Стан аптечки після бою?", answer: "Поповнити негайно" }
-          ]
-        }
-      ]
+      time: "08:00 - 12:00",
+      subject: "Протокол MARCH (Масивні кровотечі)",
+      description: "Накладання турнікету собі та побратиму. Контроль часу.",
+      type: "Practice",
+      instructorTips: ["Час накладання - до 30 сек", "Перевірка пульсу"],
+      questions: [{question: "Де накладати турнікет?", answer: "Максимально високо"}]
     }
   ]
 };
 
-export const generateTrainingPlan = async (data: TrainingFormData): Promise<TrainingPlanResponse> => {
-  // 1. Спочатку шукаємо ключ користувача
-  const userKey = localStorage.getItem("user_gemini_api_key");
-  const isCustomKey = !!userKey; // Прапорець: чи використовується власний ключ
+// Проста функція для генерації офлайн-плану, яка не плутає теми
+const generateFallbackPlan = (data: TrainingFormData): TrainingPlanResponse => {
+  const days: TrainingDay[] = [];
   
-  // 2. Якщо немає, беремо системний
+  for (let i = 1; i <= data.durationDays; i++) {
+    // Просто чергуємо 3 базові теми, щоб не було помилок
+    let themeKey = "Engineering";
+    let themeTitle = "Інженерна підготовка";
+    
+    if (i % 3 === 0) { themeKey = "Medicine"; themeTitle = "Тактична медицина"; }
+    else if (i % 2 === 0) { themeKey = "Tactics"; themeTitle = "Тактика та БПЛА"; }
+
+    days.push({
+      dayNumber: i,
+      theme: themeTitle,
+      objectives: ["Відпрацювання нормативів", "Робота з матчастиною"],
+      safetyNotes: "Робота з ММГ. Дотримання дистанцій.",
+      schedule: [
+        ...FALLBACK_DB[themeKey],
+        {
+            time: "14:00 - 16:00",
+            subject: "Комплексне тренування / Фізо",
+            description: "Закріплення вивченого матеріалу у складі групи.",
+            type: "Drill",
+            instructorTips: ["Інтенсивність середня"],
+            questions: []
+        }
+      ]
+    });
+  }
+
+  return {
+    title: `План підготовки (ОФЛАЙН РЕЖИМ)`,
+    overview: "Увага! План згенеровано локально, оскільки сервіс AI недоступний. Це базовий шаблон.",
+    days: days
+  };
+};
+
+// ==========================================
+// 3. AI GENERATION LOGIC (MAIN)
+// ==========================================
+
+export const generateTrainingPlan = async (data: TrainingFormData): Promise<TrainingPlanResponse> => {
+  // 1. Отримуємо ключ
+  const userKey = localStorage.getItem("user_gemini_api_key");
   const apiKey = userKey || process.env.API_KEY;
 
+  // Якщо ключа немає взагалі - віддаємо Fallback
   if (!apiKey) {
-    console.warn("No API Key found. Using fallback.");
-    // Чекаємо трохи для імітації роботи
-    await wait(1500);
-    return FALLBACK_PLAN;
+    console.warn("No API Key. Using fallback.");
+    await new Promise(r => setTimeout(r, 1000));
+    return generateFallbackPlan(data);
   }
 
   const ai = new GoogleGenAI({ apiKey });
 
-  const selectedFocusDetails = data.focusAreas.map(topic => {
-    const detail = TOPIC_DETAILS[topic] || "Тема важлива. Акцент на практиці.";
-    return `ТЕМА: ${topic}. СУТЬ: ${detail}`;
-  }).join("\n");
-
+  // 2. Формуємо правильний Prompt
   const prompt = `
-    РОЛЬ: Інструктор саперної роти ЗСУ.
-    ЗАВДАННЯ: Розклад занять на ${data.durationDays} дн.
-    РІВЕНЬ: ${data.experienceLevel}.
-    ТЕМИ:
-    ${selectedFocusDetails}
-    НОТАТКИ: ${data.customNotes || "База."}
+    Role: Senior Military Instructor (Sapper/Engineer).
+    Task: Create a rigorous training plan JSON for ${data.durationDays} days.
+    Audience Level: ${data.experienceLevel}.
+    Specific Focus Topics: ${JSON.stringify(data.focusAreas)}.
+    User Notes: "${data.customNotes}".
 
-    ВИМОГИ:
-    1. Структура: День -> Тема -> Розклад.
-    2. Конкретика: В "instructorTips" пиши ТТХ і поради. Без води.
-    3. Тест: Додай "questions" (РІВНО 3 питання) до кожного заняття.
+    CRITICAL COMPRESSION RULE:
+    The user has selected ${data.focusAreas.length} specific topics.
+    You MUST cover ALL of these topics within the ${data.durationDays} days.
+    - If the number of days is small, DO NOT skip topics.
+    - Instead, shorten the time for each module or combine compatible topics (e.g., "Mines + Medevac" scenario).
+    - It is acceptable to have shorter theory blocks to ensure everything is covered.
+    - Every selected topic from the list MUST appear in the schedule at least once.
 
-    МОВА: Українська (військова).
+    REQUIREMENTS:
+    1. STRICTLY MATCH THE THEME: Ensure the schedule content matches the day's theme.
+    2. REALISM: Use real nomenclature (PMN-4, OZM-72, Mavic 3T, EW Spoofing).
+    3. STRUCTURE:
+       - Day Theme (Title)
+       - The schedule array can have 2-4 modules depending on how much needs to be packed in.
+    4. LANGUAGE: Ukrainian (Military terminology).
+
+    JSON SCHEMA:
+    {
+      "title": "String (Course Name)",
+      "overview": "String (Brief summary stating that all selected topics are covered)",
+      "days": [
+        {
+          "dayNumber": Integer,
+          "theme": "String (Main Topic of the day)",
+          "objectives": ["String", "String"],
+          "safetyNotes": "String (Critical safety warnings)",
+          "schedule": [
+            {
+              "time": "String (e.g. 08:00 - 09:30)",
+              "subject": "String",
+              "description": "String (Detailed exercise description)",
+              "type": "Theory" | "Practice" | "Drill",
+              "instructorTips": ["String (Technical specs or teaching advice)"],
+              "questions": [{"question": "String", "answer": "String"}] (Exactly 2-3 control questions)
+            }
+          ]
+        }
+      ]
+    }
   `;
 
-  // Змінна для збереження помилки від ОСНОВНОЇ моделі.
-  let primaryError: Error | null = null;
+  // 3. Retry Logic (перебір моделей)
+  let lastError = null;
 
-  const generateWithRetry = async (attempt = 0): Promise<string> => {
-    // Якщо спроби вичерпано
-    if (attempt >= AVAILABLE_MODELS.length) {
-        // Якщо ми спіймали помилку від основної моделі, кидаємо її
-        if (primaryError) throw primaryError;
-        throw new Error("Не вдалося підключитися до серверів Google. Перевірте ключ.");
-    }
-
-    const modelName = AVAILABLE_MODELS[attempt];
-    
+  for (const modelName of AVAILABLE_MODELS) {
     try {
-      console.log(`Generating plan... Model: ${modelName} (Attempt ${attempt + 1})`);
+      console.log(`Attempting generation with ${modelName}...`);
       
       const response = await ai.models.generateContent({
         model: modelName,
         contents: prompt,
         config: {
-          systemInstruction: "Ти досвідчений сапер. Пиши JSON.",
           responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              title: { type: Type.STRING },
-              overview: { type: Type.STRING },
-              days: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    dayNumber: { type: Type.INTEGER },
-                    theme: { type: Type.STRING },
-                    objectives: {
-                      type: Type.ARRAY,
-                      items: { type: Type.STRING }
-                    },
-                    safetyNotes: { type: Type.STRING },
-                    schedule: {
-                      type: Type.ARRAY,
-                      items: {
-                        type: Type.OBJECT,
-                        properties: {
-                          time: { type: Type.STRING },
-                          subject: { type: Type.STRING },
-                          description: { type: Type.STRING },
-                          instructorTips: { 
-                            type: Type.ARRAY,
-                            items: { type: Type.STRING },
-                            description: "ТТХ або поради"
-                          },
-                          questions: {
-                            type: Type.ARRAY,
-                            items: {
-                              type: Type.OBJECT,
-                              properties: {
-                                question: { type: Type.STRING },
-                                answer: { type: Type.STRING }
-                              },
-                              required: ["question", "answer"]
-                            },
-                            description: "3 питання"
-                          },
-                          type: { 
-                            type: Type.STRING, 
-                            enum: ["Theory", "Practice", "Drill"]
-                          }
-                        },
-                        required: ["time", "subject", "description", "instructorTips", "type", "questions"]
-                      }
-                    }
-                  },
-                  required: ["dayNumber", "theme", "objectives", "safetyNotes", "schedule"]
-                }
-              }
-            },
-            required: ["title", "overview", "days"]
-          }
+          // temperature: 0.4 робить відповіді більш точними і менш "творчими" (менше галюцинацій)
+          temperature: 0.4, 
         }
       });
 
       const text = response.text;
-      if (!text) throw new Error("Порожня відповідь від сервера.");
-      return text;
+      if (!text) throw new Error("Empty response");
+      
+      const parsed = JSON.parse(text) as TrainingPlanResponse;
+      
+      // Валідація результату (чи є дні?)
+      if (!parsed.days || parsed.days.length === 0) throw new Error("Invalid JSON structure");
 
-    } catch (err: any) {
-      console.warn(`Error with ${modelName}:`, err.toString());
+      return parsed; // Успіх!
+
+    } catch (e: any) {
+      console.warn(`Failed with ${modelName}:`, e.message);
+      lastError = e;
       
-      const errorMessage = err.message || '';
-      
-      if (modelName === 'gemini-1.5-flash') {
-          primaryError = err;
+      // Якщо помилка авторизації - немає сенсу пробувати інші моделі
+      if (e.message?.includes('403') || e.message?.includes('key')) {
+        throw new Error("Невірний API ключ. Будь ласка, перевірте налаштування.");
       }
-      
-      // Якщо помилка явно про авторизацію і це власний ключ - немає сенсу перебирати інші моделі.
-      if (isCustomKey && (errorMessage.includes('403') || errorMessage.includes('API key') || errorMessage.includes('key not valid'))) {
-         throw new Error(`Ваш API ключ недійсний (Error 403). Перевірте правильність вводу.`);
-      }
-
-      // Пробуємо наступну модель
-      await wait(1500);
-      return generateWithRetry(attempt + 1);
     }
-  };
-
-  try {
-    const jsonText = await generateWithRetry();
-    return JSON.parse(jsonText) as TrainingPlanResponse;
-
-  } catch (error: any) {
-    console.error("Gemini API Error:", error);
-    
-    // Якщо це була помилка з кастомним ключем - прокидаємо її далі
-    if (isCustomKey) {
-        throw error;
-    }
-
-    // Тільки якщо системний ключ помер - показуємо резервний план
-    return FALLBACK_PLAN;
   }
+
+  // Якщо нічого не вийшло - Fallback
+  console.error("All AI models failed.", lastError);
+  return generateFallbackPlan(data);
+};
+
+// Функція перевірки ключа
+export const validateApiKey = async (apiKey: string): Promise<void> => {
+    const ai = new GoogleGenAI({ apiKey });
+    // Пробуємо найшвидшу модель
+    try {
+        await ai.models.generateContent({ 
+            model: 'gemini-1.5-flash', 
+            contents: 'Ping' 
+        });
+    } catch (e: any) {
+         // Якщо 1.5 flash не відповідає, спробуємо 2.0 (на випадок якщо 1.5 заблокована в регіоні)
+         try {
+            await ai.models.generateContent({ 
+                model: 'gemini-2.0-flash-exp', 
+                contents: 'Ping' 
+            });
+         } catch (e2: any) {
+             throw new Error("Ключ не пройшов перевірку. Переконайтеся, що він активний і має права доступу.");
+         }
+    }
 };
