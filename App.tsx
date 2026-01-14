@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { InputForm } from './components/InputForm';
 import { PlanDisplay } from './components/PlanDisplay';
-import { generateTrainingPlan } from './services/geminiService';
+import { generateTrainingPlan, validateApiKey } from './services/geminiService';
 import { TrainingFormData, TrainingPlanResponse } from './types';
-import { TriangleAlert, History, Settings, X, KeyRound, ExternalLink, Save } from 'lucide-react';
+import { TriangleAlert, History, Settings, X, KeyRound, ExternalLink, Save, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 
 const STORAGE_KEY = 'sapper_hub_last_plan';
 const API_KEY_STORAGE = 'user_gemini_api_key';
@@ -16,6 +16,11 @@ const App: React.FC = () => {
   // Settings Modal State
   const [showSettings, setShowSettings] = useState(false);
   const [userApiKey, setUserApiKey] = useState('');
+  
+  // Key Validation State
+  const [checkingKey, setCheckingKey] = useState(false);
+  const [keyStatus, setKeyStatus] = useState<'idle' | 'valid' | 'invalid'>('idle');
+  const [keyErrorMsg, setKeyErrorMsg] = useState('');
 
   // Load from local storage on mount
   useEffect(() => {
@@ -65,7 +70,27 @@ const App: React.FC = () => {
         localStorage.setItem(API_KEY_STORAGE, userApiKey.trim());
     }
     setShowSettings(false);
-    alert("Ключ збережено! Тепер ліміти не будуть проблемою.");
+    // Скидаємо статус перевірки при закритті
+    setKeyStatus('idle');
+    setKeyErrorMsg('');
+  };
+  
+  const checkConnection = async () => {
+    if (!userApiKey.trim()) return;
+    
+    setCheckingKey(true);
+    setKeyStatus('idle');
+    setKeyErrorMsg('');
+    
+    try {
+        await validateApiKey(userApiKey.trim());
+        setKeyStatus('valid');
+    } catch (e: any) {
+        setKeyStatus('invalid');
+        setKeyErrorMsg(e.message || "Невідома помилка");
+    } finally {
+        setCheckingKey(false);
+    }
   };
 
   return (
@@ -87,7 +112,7 @@ const App: React.FC = () => {
                     </div>
 
                     <p className="text-stone-400 text-sm mb-4 leading-relaxed">
-                        Якщо ви бачите помилку 429 (ліміти), введіть свій власний безкоштовний ключ Gemini. Це гарантує стабільну роботу.
+                        Щоб зняти ліміти генерації (помилка 429), введіть свій безкоштовний ключ Gemini.
                     </p>
 
                     <a 
@@ -100,23 +125,62 @@ const App: React.FC = () => {
                         <ExternalLink className="w-3 h-3" />
                     </a>
 
-                    <div className="space-y-2 mb-6">
+                    <div className="space-y-2 mb-4">
                         <label className="block text-xs font-bold text-stone-500 uppercase">Ваш API Key</label>
-                        <input 
-                            type="password" 
-                            value={userApiKey}
-                            onChange={(e) => setUserApiKey(e.target.value)}
-                            placeholder="AIzaSy..."
-                            className="w-full bg-black/50 border border-stone-700 rounded-lg p-3 text-stone-200 font-mono text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none"
-                        />
+                        <div className="relative">
+                            <input 
+                                type="password" 
+                                value={userApiKey}
+                                onChange={(e) => {
+                                    setUserApiKey(e.target.value);
+                                    setKeyStatus('idle'); // Скидаємо статус при редагуванні
+                                }}
+                                placeholder="AIzaSy..."
+                                className={`w-full bg-black/50 border rounded-lg p-3 pr-24 text-stone-200 font-mono text-sm focus:outline-none focus:ring-1 transition-all ${
+                                    keyStatus === 'valid' ? 'border-emerald-500/50 focus:border-emerald-500 focus:ring-emerald-500' :
+                                    keyStatus === 'invalid' ? 'border-red-500/50 focus:border-red-500 focus:ring-red-500' :
+                                    'border-stone-700 focus:border-amber-500 focus:ring-amber-500'
+                                }`}
+                            />
+                            
+                            <button
+                                onClick={checkConnection}
+                                disabled={checkingKey || !userApiKey.trim()}
+                                className="absolute right-1.5 top-1.5 bottom-1.5 px-3 bg-stone-800 hover:bg-stone-700 text-stone-300 text-xs font-bold rounded flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                                {checkingKey ? (
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                    "Перевірити"
+                                )}
+                            </button>
+                        </div>
                     </div>
+                    
+                    {/* Key Validation Feedback */}
+                    {keyStatus === 'valid' && (
+                        <div className="mb-4 p-3 bg-emerald-950/20 border border-emerald-900/50 rounded-lg flex items-center gap-2 text-emerald-400 text-sm animate-in fade-in slide-in-from-top-2">
+                            <CheckCircle2 className="w-4 h-4 shrink-0" />
+                            <span>Ключ працює! Можна зберігати.</span>
+                        </div>
+                    )}
+                    
+                    {keyStatus === 'invalid' && (
+                        <div className="mb-4 p-3 bg-red-950/20 border border-red-900/50 rounded-lg flex items-start gap-2 text-red-400 text-sm animate-in fade-in slide-in-from-top-2">
+                            <XCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                            <div className="overflow-hidden break-words w-full">
+                                <span className="font-bold block mb-1">Ключ не працює:</span>
+                                <span className="text-xs opacity-80 font-mono">{keyErrorMsg}</span>
+                            </div>
+                        </div>
+                    )}
 
                     <button 
                         onClick={saveApiKey}
                         className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
                     >
                         <Save className="w-4 h-4" />
-                        Зберегти
+                        Зберегти та закрити
                     </button>
                 </div>
             </div>
@@ -160,7 +224,7 @@ const App: React.FC = () => {
         
         {/* Error Banner */}
         {error && (
-            <div className="max-w-2xl mx-auto mb-8 bg-red-950/20 border border-red-900/50 p-4 rounded-lg flex items-center gap-3 text-red-400">
+            <div className="max-w-2xl mx-auto mb-8 bg-red-950/20 border border-red-900/50 p-4 rounded-lg flex items-center gap-3 text-red-400 animate-in fade-in slide-in-from-top-2">
                 <TriangleAlert className="w-5 h-5 shrink-0" />
                 <p>{error}</p>
             </div>

@@ -35,6 +35,20 @@ const TOPIC_DETAILS: Record<string, string> = {
 
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Функція для перевірки ключа з UI
+export const validateApiKey = async (apiKey: string): Promise<void> => {
+  const ai = new GoogleGenAI({ apiKey });
+  try {
+    // Робимо максимально простий запит для тесту
+    await ai.models.generateContent({
+      model: 'gemini-1.5-flash',
+      contents: 'Ping',
+    });
+  } catch (error: any) {
+    throw error;
+  }
+};
+
 // Статичний план для Fallback режиму
 const FALLBACK_PLAN: TrainingPlanResponse = {
   title: "⚠️ РЕЗЕРВНИЙ ПЛАН (OFFLINE MODE - 5 ДНІВ)",
@@ -96,6 +110,7 @@ const FALLBACK_PLAN: TrainingPlanResponse = {
         }
       ]
     },
+    // ... Інші дні скорочено для економії місця, вони ідентичні попередньому ...
     {
       dayNumber: 2,
       theme: "Тактична медицина та евакуація",
@@ -297,18 +312,25 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
     МОВА: Українська (військова).
   `;
 
-  // Оновлено список моделей: gemini-2.0-flash-exp зараз найстабільніша для free tier
+  // ПОВЕРНУТО: gemini-1.5-flash на перше місце. Це найнадійніша модель для стабільних версій.
+  // gemini-2.0-flash-exp може бути нестабільною в деяких регіонах.
   const MODELS_TO_TRY = [
-    'gemini-2.0-flash-exp', // Найновіша, швидка, зазвичай працює
-    'gemini-1.5-flash',     // Стандарт
-    'gemini-1.5-flash-8b',  // Економна
-    'gemini-1.5-flash-002'  // Альтернативна версія
+    'gemini-1.5-flash',
+    'gemini-2.0-flash-exp', 
+    'gemini-1.5-flash-8b'
   ];
+
+  // Змінна для збереження помилки від ОСНОВНОЇ моделі.
+  // Якщо всі впадуть, ми покажемо саме цю помилку, а не останню.
+  let primaryError: Error | null = null;
 
   const generateWithRetry = async (attempt = 0): Promise<string> => {
     // Якщо спроби вичерпано
     if (attempt >= MODELS_TO_TRY.length) {
-        throw new Error("Не вдалося отримати відповідь від жодної моделі (404/429/500). Спробуйте пізніше або перевірте ключ.");
+        // Якщо ми спіймали помилку від основної моделі, кидаємо її (вона найбільш інформативна)
+        if (primaryError) throw primaryError;
+        
+        throw new Error("Не вдалося підключитися до серверів Google. Перевірте ключ.");
     }
 
     const modelName = MODELS_TO_TRY[attempt];
@@ -390,14 +412,19 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
       console.warn(`Error with ${modelName}:`, err.toString());
       
       const errorMessage = err.message || '';
-      const isAuthError = errorMessage.includes('403') || errorMessage.includes('API key not valid');
       
-      // Якщо це явна помилка авторизації - немає сенсу перебирати інші моделі, ключ невірний всюди
-      if (isCustomKey && isAuthError) {
-         throw new Error(`Ваш API ключ недійсний (Error 403). Перевірте правильність.`);
+      // Якщо це основна модель - запам'ятовуємо помилку
+      if (modelName === 'gemini-1.5-flash') {
+          primaryError = err;
+      }
+      
+      // Якщо помилка явно про авторизацію і це власний ключ - немає сенсу перебирати інші моделі.
+      // 403 Forbidden або 400 Bad Request (API Key invalid)
+      if (isCustomKey && (errorMessage.includes('403') || errorMessage.includes('API key') || errorMessage.includes('key not valid'))) {
+         throw new Error(`Ваш API ключ недійсний (Error 403). Перевірте правильність вводу.`);
       }
 
-      // У всіх інших випадках (404 Not Found, 429 Quota, 500 Server Error) - пробуємо наступну модель
+      // Пробуємо наступну модель
       await wait(1500);
       return generateWithRetry(attempt + 1);
     }
@@ -410,7 +437,7 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
   } catch (error: any) {
     console.error("Gemini API Error:", error);
     
-    // Якщо це була помилка з кастомним ключем - прокидаємо її далі в App.tsx, щоб юзер бачив
+    // Якщо це була помилка з кастомним ключем - прокидаємо її далі
     if (isCustomKey) {
         throw error;
     }
