@@ -6,10 +6,10 @@ import { TrainingFormData, TrainingPlanResponse, TrainingDay, TrainingModule, Qu
 // ==========================================
 
 const AVAILABLE_MODELS = [
-  'gemini-1.5-flash',      // Основна стабільна (Free Tier Friendly)
-  'gemini-1.5-flash-8b',   // Найлегша і найшвидша (резерв)
-  'gemini-2.0-flash',      // Нова стабільна
-  'gemini-2.0-flash-exp'   // Експериментальна (може давати 429 limit 0)
+  'gemini-2.0-flash',      // Найновіша стабільна версія (Пріоритет)
+  'gemini-1.5-flash',      // Надійна "робоча конячка" (Резерв)
+  'gemini-1.5-flash-8b',   // Швидка легка версія
+  'gemini-2.0-flash-exp'   // Експериментальна
 ];
 
 // ==========================================
@@ -107,8 +107,7 @@ const generateFallbackPlan = (data: TrainingFormData): TrainingPlanResponse => {
 
 export const generateTrainingPlan = async (data: TrainingFormData): Promise<TrainingPlanResponse> => {
   const userKey = localStorage.getItem("user_gemini_api_key");
-  const apiKey = (userKey && userKey.trim().length > 0) 
-  ? userKey   : (import.meta.env.VITE_API_KEY || "");
+  const apiKey = (userKey && userKey.trim().length > 0) ? userKey : process.env.API_KEY;
 
   if (!apiKey || apiKey.trim() === "") {
     // Якщо ключа немає, віддаємо Fallback з паузою, імітуючи роботу
@@ -209,6 +208,11 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
           continue;
       }
 
+      // 404 Може означати що ключ не має доступу до цієї конкретної моделі, пробуємо далі
+      if (msg.includes('404') || msg.includes('not found')) {
+          continue; 
+      }
+
       // Інші критичні помилки доступу
       if (msg.includes('403') || msg.includes('400') || msg.includes('key') || msg.includes('PERMISSION_DENIED')) {
          const isLastModel = modelName === AVAILABLE_MODELS[AVAILABLE_MODELS.length - 1];
@@ -221,7 +225,6 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
 
   console.error("All AI models failed.", lastError);
   
-  // Формуємо зрозуміле повідомлення про помилку
   let finalErrorMsg = lastError?.message || 'Помилка з\'єднання з AI';
   if (finalErrorMsg.includes("429")) {
       finalErrorMsg = "Перевищено ліміт запитів (429). Спробуйте зачекати хвилину або використайте інший Google акаунт.";
@@ -233,23 +236,45 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
 export const validateApiKey = async (apiKey: string): Promise<void> => {
     const ai = new GoogleGenAI({ apiKey });
     
-    try {
-        // ОНОВЛЕНО: Тестуємо на gemini-1.5-flash, бо вона найстабільніша
-        await ai.models.generateContent({ 
-            model: 'gemini-1.5-flash', 
-            contents: 'ping' 
-        });
-    } catch (e: any) {
-         console.error("API Key Validation Error Details:", e);
-         let errorMsg = e.message || "Невідома помилка";
-         
-         if (errorMsg.includes("leaked")) errorMsg = "⛔ КЛЮЧ ЗАБЛОКОВАНО: Він потрапив у публічний доступ. Створіть новий.";
-         else if (errorMsg.includes("400")) errorMsg = "Невірний формат ключа (Error 400).";
-         else if (errorMsg.includes("403")) errorMsg = "Відмовлено в доступі (Error 403). Перевірте права.";
-         else if (errorMsg.includes("404")) errorMsg = "Модель не знайдена (Error 404). Ключ може бути застарілим.";
-         else if (errorMsg.includes("429")) errorMsg = "Перевищено ліміт (Error 429). Спробуйте пізніше.";
-         else if (errorMsg.includes("fetch")) errorMsg = "Помилка мережі. Перевірте інтернет.";
-         
-         throw new Error(errorMsg);
+    // Ми пробуємо простукати кілька моделей. 
+    // Якщо хоча б одна відповість - ключ робочий.
+    // Часто нові ключі бачать тільки gemini-2.0, а старі - gemini-1.5.
+    const modelsToTry = ['gemini-2.0-flash', 'gemini-1.5-flash'];
+    let lastError: any = null;
+    let isSuccess = false;
+
+    for (const model of modelsToTry) {
+        try {
+            await ai.models.generateContent({ 
+                model: model, 
+                contents: 'ping' 
+            });
+            isSuccess = true;
+            break; // Успіх, виходимо з циклу
+        } catch (e: any) {
+            console.warn(`Validation failed for ${model}:`, e.message);
+            lastError = e;
+            const msg = e.message || "";
+            
+            // Якщо ключ точно "битий" (формат) або "злитий", немає сенсу пробувати інші моделі
+            if (msg.includes("INVALID_ARGUMENT") || msg.includes("leaked")) {
+                 break; 
+            }
+        }
     }
+
+    if (isSuccess) return;
+
+    // Якщо дійшли сюди - всі моделі відмовили
+    console.error("API Key Validation Final Error:", lastError);
+    let errorMsg = lastError?.message || "Невідома помилка";
+     
+    if (errorMsg.includes("leaked")) errorMsg = "⛔ КЛЮЧ ЗАБЛОКОВАНО: Він потрапив у публічний доступ. Створіть новий.";
+    else if (errorMsg.includes("400")) errorMsg = "Невірний формат ключа (Error 400).";
+    else if (errorMsg.includes("403")) errorMsg = "Відмовлено в доступі (Error 403). Перевірте права.";
+    else if (errorMsg.includes("404")) errorMsg = "Модель не знайдена (Error 404). Спробуйте створити ключ у новому проєкті Google Cloud.";
+    else if (errorMsg.includes("429")) errorMsg = "Перевищено ліміт (Error 429). Спробуйте пізніше.";
+    else if (errorMsg.includes("fetch")) errorMsg = "Помилка мережі. Перевірте інтернет.";
+     
+    throw new Error(errorMsg);
 };
