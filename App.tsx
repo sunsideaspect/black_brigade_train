@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { InputForm } from './components/InputForm';
 import { PlanDisplay } from './components/PlanDisplay';
-import { generateTrainingPlan, validateApiKey } from './services/import.meta.env';
+import { generateTrainingPlan, validateApiKey } from './services/geminiService';
 import { TrainingFormData, TrainingPlanResponse } from './types';
 import { TriangleAlert, History, Settings, X, KeyRound, ExternalLink, Save, CheckCircle2, XCircle, Loader2, RefreshCcw } from 'lucide-react';
 
