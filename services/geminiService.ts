@@ -43,12 +43,12 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
 
   const ai = new GoogleGenAI({ apiKey });
 
-  // Формуємо детальний опис обраних тем
   const selectedFocusDetails = data.focusAreas.map(topic => {
     const detail = TOPIC_DETAILS[topic] || "Тема важлива для виживання. Акцент на практиці.";
     return `ТЕМА: ${topic}. \nСУТЬ: ${detail}`;
   }).join("\n    ");
 
+  // Оптимізований промпт без вимоги пошуку (економить квоту)
   const prompt = `
     ТИ: Досвідчений головний сержант інженерно-саперної роти ЗСУ. 
     ЗАВДАННЯ: Скласти розклад занять.
@@ -60,40 +60,38 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
     ${selectedFocusDetails}
     - Коментар: ${data.customNotes || "Зроби з них людей."}
 
-    КРИТИЧНІ ВИМОГИ ДО РОЗКЛАДУ:
-    1. МОНОЛІТНІ ДНІ: Групуй заняття (Медицина окремо, Інженерка окремо).
-    
-    2. ІНФОРМАЦІЯ (Google Grounding):
-       - У розділі "instructorTips" ВИКОРИСТОВУЙ ПОШУК (googleSearch).
-       - Знайди актуальні ТТХ, методички, поради.
-       - Випиши СУТЬ (як AI Overview). Якщо є лінк - дай його.
-
-    3. КОНТРОЛЬ ЗНАНЬ (ОБОВ'ЯЗКОВО!):
-       - Для кожного заняття додай масив "questions".
-       - Це РІВНО 5 "підлих" питань, щоб перевірити, чи уважно слухали.
-       - Питання мають бути практичними, а не теоретичними.
-       - Додай коротку правильну відповідь.
-       Приклад:
-       Питання: "Який час самоліквідації у ПОМ-3?" 
-       Відповідь: "Від 8 до 24 годин (але може не спрацювати, не підходити!)."
-
-    4. ЗМІСТ: Суворий, без води. Тільки те, що рятує життя.
+    КРИТИЧНІ ВИМОГИ:
+    1. МОНОЛІТНІ ДНІ: Групуй заняття за змістом.
+    2. ІНФОРМАЦІЯ:
+       - У розділі "instructorTips" пиши конкретні ТТХ, поради та методики зі своєї бази знань.
+       - НЕ ПИШИ загальних фраз ("розкажіть про міни"). ПИШИ конкретику ("ПМН-2: датчик цілі 5-25 кг").
+    3. КОНТРОЛЬ ЗНАНЬ:
+       - 5 "підлих" питань до кожного заняття.
+       - Питання мають бути практичними.
 
     Мова: Українська (військова).
   `;
 
-  // Функція для повторних спроб при помилці 429
-  const generateWithRetry = async (retries = 3, delay = 2000): Promise<string> => {
+  // Список моделей для перебору у випадку помилки
+  const MODELS_TO_TRY = [
+    'gemini-2.0-flash-exp',          // Дуже швидка, експериментальна
+    'gemini-2.0-flash-thinking-exp', // Розумніша, але може бути повільнішою
+    'gemini-1.5-pro'                 // Якщо флеш недоступний, пробуємо про (іноді квоти різні)
+  ];
+
+  const generateWithRetry = async (attempt = 0): Promise<string> => {
+    const modelName = MODELS_TO_TRY[attempt % MODELS_TO_TRY.length];
+    
     try {
-      // Використовуємо gemini-2.0-flash-exp як альтернативу, бо він часто стабільніший для preview-завдань
-      // Якщо 2.0 недоступний, можна спробувати gemini-1.5-flash, але за інструкцією пріоритет - 3 або 2.5
-      // Використовуємо gemini-2.0-flash-exp, який є дуже швидким і стабільним
+      console.log(`Attempting with model: ${modelName} (Try ${attempt + 1})`);
+      
       const response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash-exp', 
+        model: modelName,
         contents: prompt,
         config: {
-          tools: [{googleSearch: {}}], 
-          systemInstruction: "Ти бойовий інструктор. Твій план має містити не лише теми, а й конкретні матеріали (знайдені в Google) та РІВНО 5 контрольних питань до кожного заняття.",
+          // ВИМКНЕНО googleSearch для економії квоти (найчастіша причина 429)
+          // tools: [{googleSearch: {}}], 
+          systemInstruction: "Ти бойовий інструктор. Використовуй свої внутрішні знання про ТТХ озброєння та тактику. Не використовуй пошук, якщо не впевнений.",
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -123,7 +121,7 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
                           instructorTips: { 
                             type: Type.ARRAY,
                             items: { type: Type.STRING },
-                            description: "Концентрат знань з Google Search."
+                            description: "Концентрат знань (ТТХ, дистанції, вага)."
                           },
                           questions: {
                             type: Type.ARRAY,
@@ -161,12 +159,20 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
 
     } catch (err: any) {
       const errorMsg = err.toString().toLowerCase();
-      // Якщо це помилка лімітів (429), пробуємо ще раз
-      if (retries > 0 && (errorMsg.includes("429") || errorMsg.includes("quota") || errorMsg.includes("exhausted"))) {
-        console.warn(`Hit rate limit. Retrying in ${delay}ms... (Attempts left: ${retries})`);
+      console.warn(`Error with ${modelName}:`, errorMsg);
+
+      const isQuotaError = errorMsg.includes("429") || errorMsg.includes("quota") || errorMsg.includes("exhausted");
+      const isOverloaded = errorMsg.includes("503") || errorMsg.includes("overloaded");
+
+      // Якщо помилка квоти або перевантаження, і ми ще не перебрали всі варіанти
+      if ((isQuotaError || isOverloaded) && attempt < 4) {
+        const delay = 2000 * Math.pow(1.5, attempt); // 2s, 3s, 4.5s...
+        console.warn(`Retrying in ${delay}ms...`);
         await wait(delay);
-        return generateWithRetry(retries - 1, delay * 2); // Експоненціальна затримка: 2с -> 4с -> 8с
+        // Пробуємо наступну модель або ту саму ще раз
+        return generateWithRetry(attempt + 1);
       }
+      
       throw err;
     }
   };
@@ -180,18 +186,10 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
     
     const errorString = error.message || error.toString();
     
-    if (
-        errorString.includes("429") || 
-        errorString.includes("RESOURCE_EXHAUSTED") || 
-        errorString.includes("quota")
-    ) {
-       throw new Error("⏳ Система перевантажена (Google API 429). Спробуйте ще раз через 30-60 секунд.");
+    if (errorString.includes("429") || errorString.includes("quota")) {
+       throw new Error("⏳ Квота вичерпана. Спробуйте через 2-3 хвилини (це обмеження Google).");
     }
     
-    if (errorString.includes("503") || errorString.includes("Overloaded")) {
-       throw new Error("Сервери Google перевантажені. Спробуйте через хвилину.");
-    }
-
-    throw new Error("⚠️ Не вдалося згенерувати план. Будь ласка, спробуйте ще раз.");
+    throw new Error("⚠️ Не вдалося згенерувати план. Спробуйте ще раз.");
   }
 };
