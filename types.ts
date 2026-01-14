@@ -99,7 +99,7 @@ export interface TrainingPlanResponse {
   days: TrainingDay[];
 }
 
-export interface FormData {
+export interface TrainingFormData {
   durationDays: number;
   experienceLevel: ExperienceLevel;
   focusAreas: string[]; // Тепер це масив рядків (обраних підтем)

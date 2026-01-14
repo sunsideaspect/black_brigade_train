@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { FormData, ExperienceLevel, TRAINING_CATEGORIES } from '../types';
+import { TrainingFormData, ExperienceLevel, TRAINING_CATEGORIES } from '../types';
 import { Loader2, Pickaxe, Shield, Check, ChevronDown, Square, SquareCheck } from 'lucide-react';
 
 interface InputFormProps {
-  onSubmit: (data: FormData) => void;
+  onSubmit: (data: TrainingFormData) => void;
   isLoading: boolean;
 }
 

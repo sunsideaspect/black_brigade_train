@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { FormData, TrainingPlanResponse } from "../types";
+import { TrainingFormData, TrainingPlanResponse } from "../types";
 
 // Жорсткий, реалістичний опис тем для умов повномасштабної війни
 const TOPIC_DETAILS: Record<string, string> = {
@@ -33,7 +33,7 @@ const TOPIC_DETAILS: Record<string, string> = {
   "Прошивка та аварійне скидання": "Як стерти рацію при загрозі полону."
 };
 
-export const generateTrainingPlan = async (data: FormData): Promise<TrainingPlanResponse> => {
+export const generateTrainingPlan = async (data: TrainingFormData): Promise<TrainingPlanResponse> => {
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
     throw new Error("API Key is missing. Please ensure process.env.API_KEY is set.");

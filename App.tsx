@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { InputForm } from './components/InputForm';
 import { PlanDisplay } from './components/PlanDisplay';
 import { generateTrainingPlan } from './services/geminiService';
-import { FormData, TrainingPlanResponse } from './types';
+import { TrainingFormData, TrainingPlanResponse } from './types';
 import { TriangleAlert, History } from 'lucide-react';
 
 const STORAGE_KEY = 'sapper_hub_last_plan';
@@ -25,7 +25,7 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const handleFormSubmit = async (data: FormData) => {
+  const handleFormSubmit = async (data: TrainingFormData) => {
     setLoading(true);
     setError(null);
     try {
