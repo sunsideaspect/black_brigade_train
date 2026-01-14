@@ -7,7 +7,7 @@ export default defineConfig(({ mode }) => {
 
   // 👇 УВАГА: Якщо ви вставите ключ сюди, НЕ ЗАВАНТАЖУЙТЕ цей файл на GitHub!
   // Google автоматично блокує ключі, знайдені в публічному коді.
-  const MANUALLY_SET_KEY = ""; 
+  const MANUALLY_SET_KEY = "AIzaSyBHKeHz_9YzXvsu1-aHxwKvc8NeoUDDrhA"; 
 
   return {
     plugins: [react()],
