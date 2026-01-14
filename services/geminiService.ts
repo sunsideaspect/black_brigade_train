@@ -297,19 +297,21 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
     МОВА: Українська (військова).
   `;
 
-  // Змінено порядок: Flash (стабільніша) перша
+  // Оновлено список моделей: gemini-2.0-flash-exp зараз найстабільніша для free tier
   const MODELS_TO_TRY = [
-    'gemini-1.5-flash',     // Стандартна, надійна
-    'gemini-1.5-flash-8b'   // Економна
+    'gemini-2.0-flash-exp', // Найновіша, швидка, зазвичай працює
+    'gemini-1.5-flash',     // Стандарт
+    'gemini-1.5-flash-8b',  // Економна
+    'gemini-1.5-flash-002'  // Альтернативна версія
   ];
 
   const generateWithRetry = async (attempt = 0): Promise<string> => {
-    // Якщо спроби вичерпано, кидаємо помилку
-    if (attempt >= MODELS_TO_TRY.length + 1) {
-        throw new Error("Всі спроби з'єднання вичерпано. Сервери перевантажені.");
+    // Якщо спроби вичерпано
+    if (attempt >= MODELS_TO_TRY.length) {
+        throw new Error("Не вдалося отримати відповідь від жодної моделі (404/429/500). Спробуйте пізніше або перевірте ключ.");
     }
 
-    const modelName = MODELS_TO_TRY[attempt % MODELS_TO_TRY.length];
+    const modelName = MODELS_TO_TRY[attempt];
     
     try {
       console.log(`Generating plan... Model: ${modelName} (Attempt ${attempt + 1})`);
@@ -387,16 +389,16 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
     } catch (err: any) {
       console.warn(`Error with ${modelName}:`, err.toString());
       
-      // КРИТИЧНА ЗМІНА: 
-      // Якщо це власний ключ користувача - НЕ перемикаємось на FALLBACK_PLAN мовчки.
-      // Ми хочемо показати користувачу, що ЙОГО ключ не працює.
-      if (isCustomKey) {
-        // Прокидаємо помилку наверх, щоб UI її показав
-        throw new Error(`Помилка вашого ключа API: ${err.message || 'Невідома помилка'}`);
-      }
+      const errorMessage = err.message || '';
+      const isAuthError = errorMessage.includes('403') || errorMessage.includes('API key not valid');
       
-      // Якщо це системний ключ - пробуємо ще раз або переходимо до fallback
-      await wait(2000);
+      // Якщо це явна помилка авторизації - немає сенсу перебирати інші моделі, ключ невірний всюди
+      if (isCustomKey && isAuthError) {
+         throw new Error(`Ваш API ключ недійсний (Error 403). Перевірте правильність.`);
+      }
+
+      // У всіх інших випадках (404 Not Found, 429 Quota, 500 Server Error) - пробуємо наступну модель
+      await wait(1500);
       return generateWithRetry(attempt + 1);
     }
   };
@@ -408,7 +410,7 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
   } catch (error: any) {
     console.error("Gemini API Error:", error);
     
-    // Якщо це була помилка з кастомним ключем - прокидаємо її далі в App.tsx
+    // Якщо це була помилка з кастомним ключем - прокидаємо її далі в App.tsx, щоб юзер бачив
     if (isCustomKey) {
         throw error;
     }
