@@ -3,14 +3,19 @@ import { InputForm } from './components/InputForm';
 import { PlanDisplay } from './components/PlanDisplay';
 import { generateTrainingPlan } from './services/geminiService';
 import { TrainingFormData, TrainingPlanResponse } from './types';
-import { TriangleAlert, History } from 'lucide-react';
+import { TriangleAlert, History, Settings, X, KeyRound, ExternalLink, Save } from 'lucide-react';
 
 const STORAGE_KEY = 'sapper_hub_last_plan';
+const API_KEY_STORAGE = 'user_gemini_api_key';
 
 const App: React.FC = () => {
   const [plan, setPlan] = useState<TrainingPlanResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Settings Modal State
+  const [showSettings, setShowSettings] = useState(false);
+  const [userApiKey, setUserApiKey] = useState('');
 
   // Load from local storage on mount
   useEffect(() => {
@@ -23,6 +28,10 @@ const App: React.FC = () => {
             localStorage.removeItem(STORAGE_KEY);
         }
     }
+    
+    // Load saved API key
+    const savedKey = localStorage.getItem(API_KEY_STORAGE);
+    if (savedKey) setUserApiKey(savedKey);
   }, []);
 
   const handleFormSubmit = async (data: TrainingFormData) => {
@@ -49,9 +58,71 @@ const App: React.FC = () => {
     }
   };
 
+  const saveApiKey = () => {
+    if (!userApiKey.trim()) {
+        localStorage.removeItem(API_KEY_STORAGE);
+    } else {
+        localStorage.setItem(API_KEY_STORAGE, userApiKey.trim());
+    }
+    setShowSettings(false);
+    alert("Ключ збережено! Тепер ліміти не будуть проблемою.");
+  };
+
   return (
     <div className="min-h-screen bg-stone-950 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-stone-900 via-stone-950 to-stone-950 text-stone-200">
       
+      {/* Settings Modal */}
+      {showSettings && (
+        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="bg-stone-900 border border-stone-700 rounded-xl w-full max-w-md shadow-2xl relative overflow-hidden">
+                <div className="p-6">
+                    <div className="flex justify-between items-start mb-6">
+                        <div className="flex items-center gap-2 text-amber-500">
+                            <KeyRound className="w-6 h-6" />
+                            <h3 className="text-xl font-bold">Налаштування API</h3>
+                        </div>
+                        <button onClick={() => setShowSettings(false)} className="text-stone-500 hover:text-white">
+                            <X className="w-6 h-6" />
+                        </button>
+                    </div>
+
+                    <p className="text-stone-400 text-sm mb-4 leading-relaxed">
+                        Якщо ви бачите помилку 429 (ліміти), введіть свій власний безкоштовний ключ Gemini. Це гарантує стабільну роботу.
+                    </p>
+
+                    <a 
+                        href="https://aistudio.google.com/app/apikey" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-blue-400 hover:text-blue-300 text-sm font-medium mb-4 hover:underline"
+                    >
+                        <span>Отримати ключ тут (Google AI Studio)</span>
+                        <ExternalLink className="w-3 h-3" />
+                    </a>
+
+                    <div className="space-y-2 mb-6">
+                        <label className="block text-xs font-bold text-stone-500 uppercase">Ваш API Key</label>
+                        <input 
+                            type="password" 
+                            value={userApiKey}
+                            onChange={(e) => setUserApiKey(e.target.value)}
+                            placeholder="AIzaSy..."
+                            className="w-full bg-black/50 border border-stone-700 rounded-lg p-3 text-stone-200 font-mono text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none"
+                        />
+                    </div>
+
+                    <button 
+                        onClick={saveApiKey}
+                        className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+                    >
+                        <Save className="w-4 h-4" />
+                        Зберегти
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
+
       {/* Navbar */}
       <header className="border-b border-stone-800 bg-stone-950/80 backdrop-blur-md sticky top-0 z-50 shadow-md print:hidden">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
@@ -64,14 +135,22 @@ const App: React.FC = () => {
           </div>
           <div className="flex items-center gap-4">
               {plan && (
-                 <div className="flex items-center gap-1.5 text-[10px] uppercase font-mono text-emerald-500 bg-emerald-950/30 px-2 py-1 rounded border border-emerald-900/50 animate-in fade-in">
+                 <div className="hidden md:flex items-center gap-1.5 text-[10px] uppercase font-mono text-emerald-500 bg-emerald-950/30 px-2 py-1 rounded border border-emerald-900/50 animate-in fade-in">
                     <History className="w-3 h-3" />
-                    <span className="hidden sm:inline">Збережено локально</span>
+                    <span className="hidden sm:inline">Збережено</span>
                  </div>
               )}
-              <div className="text-[10px] md:text-xs font-mono text-stone-500 hidden sm:block uppercase tracking-widest">
-                Інженерна підготовка
-              </div>
+              
+              <button 
+                onClick={() => setShowSettings(true)}
+                className="p-2 text-stone-400 hover:text-amber-500 hover:bg-stone-800 rounded-full transition-all relative group"
+                title="Налаштування API"
+              >
+                <Settings className="w-5 h-5" />
+                {userApiKey && (
+                    <span className="absolute top-1.5 right-2 w-2 h-2 bg-emerald-500 rounded-full border border-stone-900"></span>
+                )}
+              </button>
           </div>
         </div>
       </header>
@@ -108,7 +187,7 @@ const App: React.FC = () => {
       {/* Footer */}
       <footer className="border-t border-stone-900 py-6 md:py-8 mt-auto text-center px-4 print:hidden">
         <p className="text-stone-600 text-xs md:text-sm">
-            © {new Date().getFullYear()} SapperHub v1.0.1. ПРИЗНАЧЕНО ДЛЯ СЛУЖБОВОГО КОРИСТУВАННЯ.
+            © {new Date().getFullYear()} SapperHub v1.0.2. ПРИЗНАЧЕНО ДЛЯ СЛУЖБОВОГО КОРИСТУВАННЯ.
         </p>
       </footer>
     </div>

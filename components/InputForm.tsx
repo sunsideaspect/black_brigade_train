@@ -17,7 +17,7 @@ const LOADING_MESSAGES = [
 ];
 
 export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading }) => {
-  const [duration, setDuration] = useState<number>(3); // Зменшено до 3 для економії токенів
+  const [duration, setDuration] = useState<number>(5); // Повернуто 5 днів за замовчуванням
   const [level, setLevel] = useState<ExperienceLevel>(ExperienceLevel.NOVICE);
   const [notes, setNotes] = useState<string>('');
   const [loadingMsgIndex, setLoadingMsgIndex] = useState(0);
