@@ -44,54 +44,46 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
   const ai = new GoogleGenAI({ apiKey });
 
   const selectedFocusDetails = data.focusAreas.map(topic => {
-    const detail = TOPIC_DETAILS[topic] || "Тема важлива для виживання. Акцент на практиці.";
-    return `ТЕМА: ${topic}. \nСУТЬ: ${detail}`;
-  }).join("\n    ");
+    const detail = TOPIC_DETAILS[topic] || "Тема важлива. Акцент на практиці.";
+    return `ТЕМА: ${topic}. СУТЬ: ${detail}`;
+  }).join("\n");
 
-  // Оптимізований промпт без вимоги пошуку (економить квоту)
+  // Оптимізований промпт для економії токенів
   const prompt = `
-    ТИ: Досвідчений головний сержант інженерно-саперної роти ЗСУ. 
-    ЗАВДАННЯ: Скласти розклад занять.
-    
-    Вхідні дані:
-    - Днів: ${data.durationDays}.
-    - Рівень: ${data.experienceLevel}.
-    - ОБРАНІ ТЕМИ:
+    РОЛЬ: Інструктор саперної роти ЗСУ.
+    ЗАВДАННЯ: Розклад занять на ${data.durationDays} дн.
+    РІВЕНЬ: ${data.experienceLevel}.
+    ТЕМИ:
     ${selectedFocusDetails}
-    - Коментар: ${data.customNotes || "Зроби з них людей."}
+    НОТАТКИ: ${data.customNotes || "База."}
 
-    КРИТИЧНІ ВИМОГИ:
-    1. МОНОЛІТНІ ДНІ: Групуй заняття за змістом.
-    2. ІНФОРМАЦІЯ:
-       - У розділі "instructorTips" пиши конкретні ТТХ, поради та методики зі своєї бази знань.
-       - НЕ ПИШИ загальних фраз ("розкажіть про міни"). ПИШИ конкретику ("ПМН-2: датчик цілі 5-25 кг").
-    3. КОНТРОЛЬ ЗНАНЬ:
-       - 5 "підлих" питань до кожного заняття.
-       - Питання мають бути практичними.
+    ВИМОГИ:
+    1. Структура: День -> Тема -> Розклад.
+    2. Конкретика: В "instructorTips" пиши ТТХ (вага, радіус) та короткі поради. Без води.
+    3. Тест: Додай масив "questions" (РІВНО 3 питання) до кожного заняття. Питання практичні. Відповідь коротка.
 
-    Мова: Українська (військова).
+    МОВА: Українська (військова).
   `;
 
-  // Список моделей для перебору у випадку помилки
+  // Пріоритет на стабільну модель 1.5-flash, яка має вищі ліміти для Free Tier
   const MODELS_TO_TRY = [
-    'gemini-2.0-flash-exp',          // Дуже швидка, експериментальна
-    'gemini-2.0-flash-thinking-exp', // Розумніша, але може бути повільнішою
-    'gemini-1.5-pro'                 // Якщо флеш недоступний, пробуємо про (іноді квоти різні)
+    'gemini-1.5-flash',      // Найстабільніша для Free Tier (15 RPM)
+    'gemini-1.5-flash-8b',   // Дуже швидка і легка
+    'gemini-2.0-flash-exp'   // Розумна, але часто перевантажена
   ];
 
   const generateWithRetry = async (attempt = 0): Promise<string> => {
     const modelName = MODELS_TO_TRY[attempt % MODELS_TO_TRY.length];
     
     try {
-      console.log(`Attempting with model: ${modelName} (Try ${attempt + 1})`);
+      console.log(`Generating plan... Model: ${modelName} (Attempt ${attempt + 1})`);
       
       const response = await ai.models.generateContent({
         model: modelName,
         contents: prompt,
         config: {
-          // ВИМКНЕНО googleSearch для економії квоти (найчастіша причина 429)
-          // tools: [{googleSearch: {}}], 
-          systemInstruction: "Ти бойовий інструктор. Використовуй свої внутрішні знання про ТТХ озброєння та тактику. Не використовуй пошук, якщо не впевнений.",
+          // Відключаємо пошук повністю, це головна причина 429
+          systemInstruction: "Ти досвідчений сапер. Пиши коротко, чітко, по-військовому. Використовуй JSON.",
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -121,7 +113,7 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
                           instructorTips: { 
                             type: Type.ARRAY,
                             items: { type: Type.STRING },
-                            description: "Концентрат знань (ТТХ, дистанції, вага)."
+                            description: "3-4 пункти ТТХ або порад"
                           },
                           questions: {
                             type: Type.ARRAY,
@@ -133,7 +125,7 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
                               },
                               required: ["question", "answer"]
                             },
-                            description: "Список з 5 контрольних питань."
+                            description: "Рівно 3 питання"
                           },
                           type: { 
                             type: Type.STRING, 
@@ -154,7 +146,7 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
       });
 
       const text = response.text;
-      if (!text) throw new Error("No text response from AI");
+      if (!text) throw new Error("No text response");
       return text;
 
     } catch (err: any) {
@@ -164,12 +156,12 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
       const isQuotaError = errorMsg.includes("429") || errorMsg.includes("quota") || errorMsg.includes("exhausted");
       const isOverloaded = errorMsg.includes("503") || errorMsg.includes("overloaded");
 
-      // Якщо помилка квоти або перевантаження, і ми ще не перебрали всі варіанти
-      if ((isQuotaError || isOverloaded) && attempt < 4) {
-        const delay = 2000 * Math.pow(1.5, attempt); // 2s, 3s, 4.5s...
-        console.warn(`Retrying in ${delay}ms...`);
+      // Якщо помилка квоти, робимо довшу паузу
+      if ((isQuotaError || isOverloaded) && attempt < 5) {
+        // Збільшуємо час очікування: 4с, 8с, 12с...
+        const delay = 4000 * (attempt + 1); 
+        console.warn(`Quota hit. Waiting ${delay/1000}s before retry...`);
         await wait(delay);
-        // Пробуємо наступну модель або ту саму ще раз
         return generateWithRetry(attempt + 1);
       }
       
@@ -182,12 +174,12 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
     return JSON.parse(jsonText) as TrainingPlanResponse;
 
   } catch (error: any) {
-    console.error("Gemini API Error Full Object:", error);
+    console.error("Gemini API Fatal Error:", error);
     
     const errorString = error.message || error.toString();
     
     if (errorString.includes("429") || errorString.includes("quota")) {
-       throw new Error("⏳ Квота вичерпана. Спробуйте через 2-3 хвилини (це обмеження Google).");
+       throw new Error("⏳ Сервери Google перевантажені запитами (429). Спробуйте зменшити кількість днів у плані або зачекайте 5 хвилин.");
     }
     
     throw new Error("⚠️ Не вдалося згенерувати план. Спробуйте ще раз.");
