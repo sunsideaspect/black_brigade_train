@@ -6,7 +6,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
 
   // 👇 ВСТАВТЕ ВАШ API КЛЮЧ У ЛАПКИ НИЖЧЕ, щоб він працював постійно 👇
-  const MANUALLY_SET_KEY = ""; 
+  const MANUALLY_SET_KEY = "AIzaSyARH5f3ZsZ3ucjNwHsoRuaOBXWog8Zz-ZI"; 
 
   return {
     plugins: [react()],
