@@ -109,9 +109,10 @@ const generateFallbackPlan = (data: TrainingFormData): TrainingPlanResponse => {
 // ==========================================
 
 export const generateTrainingPlan = async (data: TrainingFormData): Promise<TrainingPlanResponse> => {
-  // 1. Отримуємо ключ
+  // 1. Отримуємо ключ (пріоритет: localStorage -> hardcoded)
   const userKey = localStorage.getItem("user_gemini_api_key");
-  const apiKey = userKey || process.env.API_KEY;
+  // Якщо в localStorage збережено порожній рядок, використовуємо hardcoded
+  const apiKey = (userKey && userKey.trim().length > 0) ? userKey : process.env.API_KEY;
 
   // Якщо ключа немає взагалі - віддаємо Fallback
   if (!apiKey) {
@@ -183,7 +184,6 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
         contents: prompt,
         config: {
           responseMimeType: "application/json",
-          // temperature: 0.4 робить відповіді більш точними і менш "творчими" (менше галюцинацій)
           temperature: 0.4, 
         }
       });
@@ -193,7 +193,6 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
       
       const parsed = JSON.parse(text) as TrainingPlanResponse;
       
-      // Валідація результату (чи є дні?)
       if (!parsed.days || parsed.days.length === 0) throw new Error("Invalid JSON structure");
 
       return parsed; // Успіх!
@@ -202,36 +201,37 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
       console.warn(`Failed with ${modelName}:`, e.message);
       lastError = e;
       
-      // Якщо помилка авторизації - немає сенсу пробувати інші моделі
-      if (e.message?.includes('403') || e.message?.includes('key')) {
-        throw new Error("Невірний API ключ. Будь ласка, перевірте налаштування.");
+      // Якщо помилка авторизації (403/400) - перериваємо цикл, ключ невірний для всіх моделей
+      if (e.message && (e.message.includes('403') || e.message.includes('400') || e.message.includes('key'))) {
+        throw new Error(`Помилка API (${modelName}): ${e.message}`);
       }
     }
   }
 
   // Якщо нічого не вийшло - Fallback
   console.error("All AI models failed.", lastError);
-  return generateFallbackPlan(data);
+  throw new Error(`AI Generation Failed: ${lastError?.message || 'Unknown error'}`);
 };
 
-// Функція перевірки ключа
+// Функція перевірки ключа з детальним звітом
 export const validateApiKey = async (apiKey: string): Promise<void> => {
     const ai = new GoogleGenAI({ apiKey });
-    // Пробуємо найшвидшу модель
+    
     try {
+        // Використовуємо найстабільнішу модель для перевірки
         await ai.models.generateContent({ 
             model: 'gemini-1.5-flash', 
-            contents: 'Ping' 
+            contents: 'ping' 
         });
     } catch (e: any) {
-         // Якщо 1.5 flash не відповідає, спробуємо 2.0 (на випадок якщо 1.5 заблокована в регіоні)
-         try {
-            await ai.models.generateContent({ 
-                model: 'gemini-2.0-flash-exp', 
-                contents: 'Ping' 
-            });
-         } catch (e2: any) {
-             throw new Error("Ключ не пройшов перевірку. Переконайтеся, що він активний і має права доступу.");
-         }
+         console.error("API Key Validation Error Details:", e);
+         // Прокидаємо реальну помилку користувачу
+         let errorMsg = e.message || "Невідома помилка";
+         
+         if (errorMsg.includes("400")) errorMsg = "API Key Invalid (Error 400). Перевірте правильність ключа.";
+         if (errorMsg.includes("403")) errorMsg = "Access Denied (Error 403). Ключ заблоковано або він не має прав.";
+         if (errorMsg.includes("fetch")) errorMsg = "Network Error. Перевірте інтернет або VPN.";
+         
+         throw new Error(errorMsg);
     }
 };

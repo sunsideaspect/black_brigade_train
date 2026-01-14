@@ -3,7 +3,7 @@ import { InputForm } from './components/InputForm';
 import { PlanDisplay } from './components/PlanDisplay';
 import { generateTrainingPlan, validateApiKey } from './services/geminiService';
 import { TrainingFormData, TrainingPlanResponse } from './types';
-import { TriangleAlert, History, Settings, X, KeyRound, ExternalLink, Save, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { TriangleAlert, History, Settings, X, KeyRound, ExternalLink, Save, CheckCircle2, XCircle, Loader2, RefreshCcw } from 'lucide-react';
 
 const STORAGE_KEY = 'sapper_hub_last_plan';
 const API_KEY_STORAGE = 'user_gemini_api_key';
@@ -48,6 +48,7 @@ const App: React.FC = () => {
       // Save to local storage
       localStorage.setItem(STORAGE_KEY, JSON.stringify(generatedPlan));
     } catch (err: any) {
+      // Якщо помилка, показуємо її, але не скидаємо план, якщо він був
       setError(err.message || "Виникла помилка при генерації плану. Перевірте API ключ.");
     } finally {
       setLoading(false);
@@ -73,17 +74,25 @@ const App: React.FC = () => {
     // Скидаємо статус перевірки при закритті
     setKeyStatus('idle');
     setKeyErrorMsg('');
+    setError(null); // Очищаємо старі помилки
   };
   
   const checkConnection = async () => {
-    if (!userApiKey.trim()) return;
+    // Якщо поле пусте, перевіряємо чи є hardcoded ключ
+    const keyToTest = userApiKey.trim() || process.env.API_KEY;
+    
+    if (!keyToTest) {
+        setKeyStatus('invalid');
+        setKeyErrorMsg("Поле пусте і вшитий ключ відсутній.");
+        return;
+    }
     
     setCheckingKey(true);
     setKeyStatus('idle');
     setKeyErrorMsg('');
     
     try {
-        await validateApiKey(userApiKey.trim());
+        await validateApiKey(keyToTest);
         setKeyStatus('valid');
     } catch (e: any) {
         setKeyStatus('invalid');
@@ -112,7 +121,7 @@ const App: React.FC = () => {
                     </div>
 
                     <p className="text-stone-400 text-sm mb-4 leading-relaxed">
-                        Щоб зняти ліміти генерації (помилка 429), введіть свій безкоштовний ключ Gemini.
+                        Щоб зняти ліміти генерації (помилка 429) або якщо вшитий ключ заблоковано, введіть власний ключ.
                     </p>
 
                     <a 
@@ -121,7 +130,7 @@ const App: React.FC = () => {
                         rel="noopener noreferrer"
                         className="flex items-center gap-2 text-blue-400 hover:text-blue-300 text-sm font-medium mb-4 hover:underline"
                     >
-                        <span>Отримати ключ тут (Google AI Studio)</span>
+                        <span>Отримати ключ (створюйте New Project!)</span>
                         <ExternalLink className="w-3 h-3" />
                     </a>
 
@@ -133,9 +142,9 @@ const App: React.FC = () => {
                                 value={userApiKey}
                                 onChange={(e) => {
                                     setUserApiKey(e.target.value);
-                                    setKeyStatus('idle'); // Скидаємо статус при редагуванні
+                                    setKeyStatus('idle'); 
                                 }}
-                                placeholder="AIzaSy..."
+                                placeholder={process.env.API_KEY ? "Ключ вшито в код (залиште пустим)" : "AIzaSy..."}
                                 className={`w-full bg-black/50 border rounded-lg p-3 pr-24 text-stone-200 font-mono text-sm focus:outline-none focus:ring-1 transition-all ${
                                     keyStatus === 'valid' ? 'border-emerald-500/50 focus:border-emerald-500 focus:ring-emerald-500' :
                                     keyStatus === 'invalid' ? 'border-red-500/50 focus:border-red-500 focus:ring-red-500' :
@@ -145,7 +154,7 @@ const App: React.FC = () => {
                             
                             <button
                                 onClick={checkConnection}
-                                disabled={checkingKey || !userApiKey.trim()}
+                                disabled={checkingKey}
                                 className="absolute right-1.5 top-1.5 bottom-1.5 px-3 bg-stone-800 hover:bg-stone-700 text-stone-300 text-xs font-bold rounded flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                             >
                                 {checkingKey ? (
@@ -155,13 +164,19 @@ const App: React.FC = () => {
                                 )}
                             </button>
                         </div>
+                        {process.env.API_KEY && !userApiKey && (
+                            <p className="text-[10px] text-emerald-500/80 flex items-center gap-1 mt-1">
+                                <CheckCircle2 className="w-3 h-3" />
+                                Використовується вшитий ключ з конфігурації
+                            </p>
+                        )}
                     </div>
                     
                     {/* Key Validation Feedback */}
                     {keyStatus === 'valid' && (
                         <div className="mb-4 p-3 bg-emerald-950/20 border border-emerald-900/50 rounded-lg flex items-center gap-2 text-emerald-400 text-sm animate-in fade-in slide-in-from-top-2">
                             <CheckCircle2 className="w-4 h-4 shrink-0" />
-                            <span>Ключ працює! Можна зберігати.</span>
+                            <span>Ключ працює!</span>
                         </div>
                     )}
                     
@@ -169,19 +184,32 @@ const App: React.FC = () => {
                         <div className="mb-4 p-3 bg-red-950/20 border border-red-900/50 rounded-lg flex items-start gap-2 text-red-400 text-sm animate-in fade-in slide-in-from-top-2">
                             <XCircle className="w-4 h-4 shrink-0 mt-0.5" />
                             <div className="overflow-hidden break-words w-full">
-                                <span className="font-bold block mb-1">Ключ не працює:</span>
-                                <span className="text-xs opacity-80 font-mono">{keyErrorMsg}</span>
+                                <span className="font-bold block mb-1">Помилка:</span>
+                                <span className="text-xs opacity-90 font-mono leading-tight block">{keyErrorMsg}</span>
                             </div>
                         </div>
                     )}
 
-                    <button 
-                        onClick={saveApiKey}
-                        className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
-                    >
-                        <Save className="w-4 h-4" />
-                        Зберегти та закрити
-                    </button>
+                    <div className="flex gap-2">
+                         <button 
+                            onClick={() => {
+                                setUserApiKey('');
+                                localStorage.removeItem(API_KEY_STORAGE);
+                                setKeyStatus('idle');
+                            }}
+                            className="px-4 py-3 rounded-lg border border-stone-700 text-stone-400 hover:bg-stone-800 hover:text-white transition-all"
+                            title="Очистити поле"
+                        >
+                            <RefreshCcw className="w-4 h-4" />
+                        </button>
+                        <button 
+                            onClick={saveApiKey}
+                            className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+                        >
+                            <Save className="w-4 h-4" />
+                            Зберегти
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -224,9 +252,18 @@ const App: React.FC = () => {
         
         {/* Error Banner */}
         {error && (
-            <div className="max-w-2xl mx-auto mb-8 bg-red-950/20 border border-red-900/50 p-4 rounded-lg flex items-center gap-3 text-red-400 animate-in fade-in slide-in-from-top-2">
-                <TriangleAlert className="w-5 h-5 shrink-0" />
-                <p>{error}</p>
+            <div className="max-w-3xl mx-auto mb-8 bg-red-950/20 border border-red-900/50 p-4 rounded-lg flex items-start gap-3 text-red-400 animate-in fade-in slide-in-from-top-2 shadow-lg shadow-red-900/10">
+                <TriangleAlert className="w-5 h-5 shrink-0 mt-0.5" />
+                <div className="w-full">
+                    <h4 className="font-bold text-sm uppercase mb-1">Помилка генерації</h4>
+                    <p className="text-sm opacity-90 font-mono">{error}</p>
+                    <button 
+                        onClick={() => setShowSettings(true)}
+                        className="mt-3 text-xs bg-red-900/30 hover:bg-red-900/50 text-red-200 px-3 py-1.5 rounded border border-red-800 transition-colors"
+                    >
+                        Налаштувати ключ
+                    </button>
+                </div>
             </div>
         )}
 
