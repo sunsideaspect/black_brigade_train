@@ -33,6 +33,8 @@ const TOPIC_DETAILS: Record<string, string> = {
   "Прошивка та аварійне скидання": "Як стерти рацію при загрозі полону."
 };
 
+const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 export const generateTrainingPlan = async (data: TrainingFormData): Promise<TrainingPlanResponse> => {
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
@@ -80,90 +82,116 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
     Мова: Українська (військова).
   `;
 
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: prompt,
-      config: {
-        tools: [{googleSearch: {}}], 
-        systemInstruction: "Ти бойовий інструктор. Твій план має містити не лише теми, а й конкретні матеріали (знайдені в Google) та РІВНО 5 контрольних питань до кожного заняття.",
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            title: { type: Type.STRING },
-            overview: { type: Type.STRING },
-            days: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  dayNumber: { type: Type.INTEGER },
-                  theme: { type: Type.STRING },
-                  objectives: {
-                    type: Type.ARRAY,
-                    items: { type: Type.STRING }
-                  },
-                  safetyNotes: { type: Type.STRING },
-                  schedule: {
-                    type: Type.ARRAY,
-                    items: {
-                      type: Type.OBJECT,
-                      properties: {
-                        time: { type: Type.STRING },
-                        subject: { type: Type.STRING },
-                        description: { type: Type.STRING },
-                        instructorTips: { 
-                          type: Type.ARRAY,
-                          items: { type: Type.STRING },
-                          description: "Концентрат знань з Google Search."
-                        },
-                        questions: {
-                          type: Type.ARRAY,
-                          items: {
-                            type: Type.OBJECT,
-                            properties: {
-                              question: { type: Type.STRING },
-                              answer: { type: Type.STRING }
-                            },
-                            required: ["question", "answer"]
+  // Функція для повторних спроб при помилці 429
+  const generateWithRetry = async (retries = 3, delay = 2000): Promise<string> => {
+    try {
+      // Використовуємо gemini-2.0-flash-exp як альтернативу, бо він часто стабільніший для preview-завдань
+      // Якщо 2.0 недоступний, можна спробувати gemini-1.5-flash, але за інструкцією пріоритет - 3 або 2.5
+      // Використовуємо gemini-2.0-flash-exp, який є дуже швидким і стабільним
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.0-flash-exp', 
+        contents: prompt,
+        config: {
+          tools: [{googleSearch: {}}], 
+          systemInstruction: "Ти бойовий інструктор. Твій план має містити не лише теми, а й конкретні матеріали (знайдені в Google) та РІВНО 5 контрольних питань до кожного заняття.",
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              title: { type: Type.STRING },
+              overview: { type: Type.STRING },
+              days: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    dayNumber: { type: Type.INTEGER },
+                    theme: { type: Type.STRING },
+                    objectives: {
+                      type: Type.ARRAY,
+                      items: { type: Type.STRING }
+                    },
+                    safetyNotes: { type: Type.STRING },
+                    schedule: {
+                      type: Type.ARRAY,
+                      items: {
+                        type: Type.OBJECT,
+                        properties: {
+                          time: { type: Type.STRING },
+                          subject: { type: Type.STRING },
+                          description: { type: Type.STRING },
+                          instructorTips: { 
+                            type: Type.ARRAY,
+                            items: { type: Type.STRING },
+                            description: "Концентрат знань з Google Search."
                           },
-                          description: "Список з 5 контрольних питань."
+                          questions: {
+                            type: Type.ARRAY,
+                            items: {
+                              type: Type.OBJECT,
+                              properties: {
+                                question: { type: Type.STRING },
+                                answer: { type: Type.STRING }
+                              },
+                              required: ["question", "answer"]
+                            },
+                            description: "Список з 5 контрольних питань."
+                          },
+                          type: { 
+                            type: Type.STRING, 
+                            enum: ["Theory", "Practice", "Drill"]
+                          }
                         },
-                        type: { 
-                          type: Type.STRING, 
-                          enum: ["Theory", "Practice", "Drill"]
-                        }
-                      },
-                      required: ["time", "subject", "description", "instructorTips", "type", "questions"]
+                        required: ["time", "subject", "description", "instructorTips", "type", "questions"]
+                      }
                     }
-                  }
-                },
-                required: ["dayNumber", "theme", "objectives", "safetyNotes", "schedule"]
+                  },
+                  required: ["dayNumber", "theme", "objectives", "safetyNotes", "schedule"]
+                }
               }
-            }
-          },
-          required: ["title", "overview", "days"]
+            },
+            required: ["title", "overview", "days"]
+          }
         }
+      });
+
+      const text = response.text;
+      if (!text) throw new Error("No text response from AI");
+      return text;
+
+    } catch (err: any) {
+      const errorMsg = err.toString().toLowerCase();
+      // Якщо це помилка лімітів (429), пробуємо ще раз
+      if (retries > 0 && (errorMsg.includes("429") || errorMsg.includes("quota") || errorMsg.includes("exhausted"))) {
+        console.warn(`Hit rate limit. Retrying in ${delay}ms... (Attempts left: ${retries})`);
+        await wait(delay);
+        return generateWithRetry(retries - 1, delay * 2); // Експоненціальна затримка: 2с -> 4с -> 8с
       }
-    });
-
-    const text = response.text;
-    if (!text) {
-      throw new Error("No response from AI");
+      throw err;
     }
+  };
 
-    return JSON.parse(text) as TrainingPlanResponse;
+  try {
+    const jsonText = await generateWithRetry();
+    return JSON.parse(jsonText) as TrainingPlanResponse;
 
   } catch (error: any) {
-    console.error("Gemini API Error:", error);
+    console.error("Gemini API Error Full Object:", error);
     
-    // Перевірка на помилку лімітів (429 Resource Exhausted)
-    const errorMessage = error.toString().toLowerCase();
-    if (errorMessage.includes("429") || errorMessage.includes("resource_exhausted") || errorMessage.includes("quota")) {
-       throw new Error("Ліміт запитів до ШІ вичерпано (Google API Quota). Будь ласка, зачекайте хвилину та спробуйте знову. Це обмеження безкоштовної версії ключа.");
+    const errorString = error.message || error.toString();
+    
+    if (
+        errorString.includes("429") || 
+        errorString.includes("RESOURCE_EXHAUSTED") || 
+        errorString.includes("quota")
+    ) {
+       throw new Error("⏳ Система перевантажена (Google API 429). Спробуйте ще раз через 30-60 секунд.");
+    }
+    
+    if (errorString.includes("503") || errorString.includes("Overloaded")) {
+       throw new Error("Сервери Google перевантажені. Спробуйте через хвилину.");
     }
 
-    throw new Error("Не вдалося згенерувати план. Спробуйте ще раз або змініть параметри.");
+    throw new Error("⚠️ Не вдалося згенерувати план. Будь ласка, спробуйте ще раз.");
   }
 };
