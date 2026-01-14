@@ -35,7 +35,7 @@ const TOPIC_DETAILS: Record<string, string> = {
 
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Статичний план для Fallback режиму (коли немає квоти) - РОЗШИРЕНО ДО 5 ДНІВ
+// Статичний план для Fallback режиму
 const FALLBACK_PLAN: TrainingPlanResponse = {
   title: "⚠️ РЕЗЕРВНИЙ ПЛАН (OFFLINE MODE - 5 ДНІВ)",
   overview: "Увага! Сервери Google зараз перевантажені (помилка 429) або відсутній API ключ. Щоб ви могли протестувати додаток, завантажено цей розширений демонстраційний план.",
@@ -262,6 +262,8 @@ const FALLBACK_PLAN: TrainingPlanResponse = {
 export const generateTrainingPlan = async (data: TrainingFormData): Promise<TrainingPlanResponse> => {
   // 1. Спочатку шукаємо ключ користувача
   const userKey = localStorage.getItem("user_gemini_api_key");
+  const isCustomKey = !!userKey; // Прапорець: чи використовується власний ключ
+  
   // 2. Якщо немає, беремо системний
   const apiKey = userKey || process.env.API_KEY;
 
@@ -295,15 +297,16 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
     МОВА: Українська (військова).
   `;
 
+  // Змінено порядок: Flash (стабільніша) перша
   const MODELS_TO_TRY = [
-    'gemini-1.5-flash-8b',  // Найлегша модель, найменший шанс 429
-    'gemini-1.5-flash'      // Стандартна
+    'gemini-1.5-flash',     // Стандартна, надійна
+    'gemini-1.5-flash-8b'   // Економна
   ];
 
   const generateWithRetry = async (attempt = 0): Promise<string> => {
-    // Якщо спроби вичерпано, кидаємо помилку, яку спіймає зовнішній catch і поверне FALLBACK_PLAN
+    // Якщо спроби вичерпано, кидаємо помилку
     if (attempt >= MODELS_TO_TRY.length + 1) {
-        throw new Error("All retries failed");
+        throw new Error("Всі спроби з'єднання вичерпано. Сервери перевантажені.");
     }
 
     const modelName = MODELS_TO_TRY[attempt % MODELS_TO_TRY.length];
@@ -378,13 +381,21 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
       });
 
       const text = response.text;
-      if (!text) throw new Error("No text response");
+      if (!text) throw new Error("Порожня відповідь від сервера.");
       return text;
 
     } catch (err: any) {
       console.warn(`Error with ${modelName}:`, err.toString());
       
-      // Швидка пауза перед наступною спробою
+      // КРИТИЧНА ЗМІНА: 
+      // Якщо це власний ключ користувача - НЕ перемикаємось на FALLBACK_PLAN мовчки.
+      // Ми хочемо показати користувачу, що ЙОГО ключ не працює.
+      if (isCustomKey) {
+        // Прокидаємо помилку наверх, щоб UI її показав
+        throw new Error(`Помилка вашого ключа API: ${err.message || 'Невідома помилка'}`);
+      }
+      
+      // Якщо це системний ключ - пробуємо ще раз або переходимо до fallback
       await wait(2000);
       return generateWithRetry(attempt + 1);
     }
@@ -395,8 +406,14 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
     return JSON.parse(jsonText) as TrainingPlanResponse;
 
   } catch (error: any) {
-    console.error("Gemini API Error (Using Fallback):", error);
-    // ПОВЕРТАЄМО РЕЗЕРВНИЙ ПЛАН ЗАМІСТЬ ПОМИЛКИ
+    console.error("Gemini API Error:", error);
+    
+    // Якщо це була помилка з кастомним ключем - прокидаємо її далі в App.tsx
+    if (isCustomKey) {
+        throw error;
+    }
+
+    // Тільки якщо системний ключ помер - показуємо резервний план
     return FALLBACK_PLAN;
   }
 };
