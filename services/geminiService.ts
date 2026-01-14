@@ -5,10 +5,11 @@ import { TrainingFormData, TrainingPlanResponse, TrainingDay, TrainingModule, Qu
 // 1. CONFIG & MODELS
 // ==========================================
 
+// Оновлений список моделей. gemini-1.5-flash видалено через помилки доступу (404).
 const AVAILABLE_MODELS = [
-  'gemini-1.5-flash',
-  'gemini-2.0-flash-exp',
-  'gemini-1.5-flash-8b'
+  'gemini-2.0-flash',      // Стабільна швидка версія
+  'gemini-2.0-flash-exp',  // Експериментальна швидка (часто доступна безкоштовно)
+  'gemini-2.0-pro-exp-02-05' // Найпотужніша (резерв)
 ];
 
 // ==========================================
@@ -218,9 +219,9 @@ export const validateApiKey = async (apiKey: string): Promise<void> => {
     const ai = new GoogleGenAI({ apiKey });
     
     try {
-        // Використовуємо найстабільнішу модель для перевірки
+        // ОНОВЛЕНО: Використовуємо gemini-2.0-flash-exp для тесту, бо 1.5 дає 404
         await ai.models.generateContent({ 
-            model: 'gemini-1.5-flash', 
+            model: 'gemini-2.0-flash-exp', 
             contents: 'ping' 
         });
     } catch (e: any) {
@@ -230,6 +231,7 @@ export const validateApiKey = async (apiKey: string): Promise<void> => {
          
          if (errorMsg.includes("400")) errorMsg = "API Key Invalid (Error 400). Перевірте правильність ключа.";
          if (errorMsg.includes("403")) errorMsg = "Access Denied (Error 403). Ключ заблоковано або він не має прав.";
+         if (errorMsg.includes("404")) errorMsg = "Model Not Found (Error 404). Ключ не підтримує обрану модель (спробуйте інший проект).";
          if (errorMsg.includes("fetch")) errorMsg = "Network Error. Перевірте інтернет або VPN.";
          
          throw new Error(errorMsg);
