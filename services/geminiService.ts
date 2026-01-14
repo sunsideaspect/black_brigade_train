@@ -5,9 +5,6 @@ import { TrainingFormData, TrainingPlanResponse, TrainingDay, TrainingModule, Qu
 // 1. CONFIG & MODELS
 // ==========================================
 
-// ЗМІНЕНО: gemini-1.5-flash повернуто на перше місце. 
-// Це найнадійніша модель для Free Tier (15 RPM).
-// 2.0-flash-exp часто має ліміт 0 для нових акаунтів.
 const AVAILABLE_MODELS = [
   'gemini-1.5-flash',      // Основна стабільна (Free Tier Friendly)
   'gemini-1.5-flash-8b',   // Найлегша і найшвидша (резерв)
@@ -112,8 +109,9 @@ export const generateTrainingPlan = async (data: TrainingFormData): Promise<Trai
   const userKey = localStorage.getItem("user_gemini_api_key");
   const apiKey = (userKey && userKey.trim().length > 0) ? userKey : process.env.API_KEY;
 
-  if (!apiKey) {
-    console.warn("No API Key. Using fallback.");
+  if (!apiKey || apiKey.trim() === "") {
+    // Якщо ключа немає, віддаємо Fallback з паузою, імітуючи роботу
+    console.warn("No API Key found. Returning fallback plan.");
     await new Promise(r => setTimeout(r, 1000));
     return generateFallbackPlan(data);
   }

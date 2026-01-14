@@ -40,6 +40,18 @@ const App: React.FC = () => {
   }, []);
 
   const handleFormSubmit = async (data: TrainingFormData) => {
+    // 1. Перевіряємо чи є ключ взагалі (в сховищі або в env)
+    const storedKey = localStorage.getItem(API_KEY_STORAGE);
+    const envKey = process.env.API_KEY;
+    const hasValidKey = (storedKey && storedKey.trim().length > 0) || (envKey && envKey.trim().length > 0);
+
+    // 2. Якщо ключа немає - змушуємо ввести
+    if (!hasValidKey) {
+        setShowSettings(true);
+        setError("Для початку роботи необхідно ввести API Key.");
+        return;
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -48,8 +60,11 @@ const App: React.FC = () => {
       // Save to local storage
       localStorage.setItem(STORAGE_KEY, JSON.stringify(generatedPlan));
     } catch (err: any) {
-      // Якщо помилка, показуємо її, але не скидаємо план, якщо він був
       setError(err.message || "Виникла помилка при генерації плану. Перевірте API ключ.");
+      // Якщо помилка пов'язана з доступом, відкриваємо налаштування
+      if (err.message && (err.message.includes("403") || err.message.includes("400") || err.message.includes("КЛЮЧ"))) {
+          setShowSettings(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -83,7 +98,7 @@ const App: React.FC = () => {
     
     if (!keyToTest) {
         setKeyStatus('invalid');
-        setKeyErrorMsg("Поле пусте і вшитий ключ відсутній.");
+        setKeyErrorMsg("Введіть ключ для перевірки.");
         return;
     }
     
@@ -121,7 +136,7 @@ const App: React.FC = () => {
                     </div>
 
                     <p className="text-stone-400 text-sm mb-4 leading-relaxed">
-                        Щоб зняти ліміти генерації (помилка 429) або якщо вшитий ключ заблоковано, введіть власний ключ.
+                        Щоб користуватися генератором, введіть ваш власний ключ Google Gemini API.
                     </p>
 
                     <a 
@@ -138,13 +153,13 @@ const App: React.FC = () => {
                         <label className="block text-xs font-bold text-stone-500 uppercase">Ваш API Key</label>
                         <div className="relative">
                             <input 
-                                type="password" 
+                                type="text" 
                                 value={userApiKey}
                                 onChange={(e) => {
                                     setUserApiKey(e.target.value);
                                     setKeyStatus('idle'); 
                                 }}
-                                placeholder={process.env.API_KEY ? "Ключ вшито в код (залиште пустим)" : "AIzaSy..."}
+                                placeholder={process.env.API_KEY ? "Вшитий ключ активний (можна замінити)" : "Вставте ключ тут (AIzaSy...)"}
                                 className={`w-full bg-black/50 border rounded-lg p-3 pr-24 text-stone-200 font-mono text-sm focus:outline-none focus:ring-1 transition-all ${
                                     keyStatus === 'valid' ? 'border-emerald-500/50 focus:border-emerald-500 focus:ring-emerald-500' :
                                     keyStatus === 'invalid' ? 'border-red-500/50 focus:border-red-500 focus:ring-red-500' :
@@ -167,7 +182,7 @@ const App: React.FC = () => {
                         {process.env.API_KEY && !userApiKey && (
                             <p className="text-[10px] text-emerald-500/80 flex items-center gap-1 mt-1">
                                 <CheckCircle2 className="w-3 h-3" />
-                                Використовується вшитий ключ з конфігурації
+                                Використовується вшитий ключ (DEV mode)
                             </p>
                         )}
                     </div>
@@ -292,7 +307,7 @@ const App: React.FC = () => {
       {/* Footer */}
       <footer className="border-t border-stone-900 py-6 md:py-8 mt-auto text-center px-4 print:hidden">
         <p className="text-stone-600 text-xs md:text-sm">
-            © {new Date().getFullYear()} SapperHub v1.0.2. ПРИЗНАЧЕНО ДЛЯ СЛУЖБОВОГО КОРИСТУВАННЯ.
+            © {new Date().getFullYear()} SapperHub v1.0.3. ПРИЗНАЧЕНО ДЛЯ СЛУЖБОВОГО КОРИСТУВАННЯ.
         </p>
       </footer>
     </div>
