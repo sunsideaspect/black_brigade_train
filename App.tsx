@@ -108,7 +108,7 @@ const App: React.FC = () => {
       {/* Footer */}
       <footer className="border-t border-stone-900 py-6 md:py-8 mt-auto text-center px-4 print:hidden">
         <p className="text-stone-600 text-xs md:text-sm">
-            © {new Date().getFullYear()} SapperHub. ПРИЗНАЧЕНО ДЛЯ СЛУЖБОВОГО КОРИСТУВАННЯ.
+            © {new Date().getFullYear()} SapperHub v1.0.1. ПРИЗНАЧЕНО ДЛЯ СЛУЖБОВОГО КОРИСТУВАННЯ.
         </p>
       </footer>
     </div>
